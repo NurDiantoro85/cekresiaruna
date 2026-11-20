@@ -123,7 +123,6 @@
                 <table class="w-full text-left text-xs text-slate-700 border-collapse">
                     <thead class="bg-[#495098] text-white text-[11px] font-bold uppercase tracking-wider">
                         <tr>
-                            <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Kode Batch</th>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Nama File</th>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Halaman</th>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Jumlah Resi</th>
@@ -136,9 +135,6 @@
                     <tbody class="divide-y divide-slate-200 font-medium bg-white">
                         @forelse($batches as $b)
                             <tr class="hover:bg-slate-50/80 transition border-b border-slate-200 text-slate-900">
-                                <td class="py-3 px-3.5 border-r border-slate-200 font-mono text-xs font-bold text-slate-900 text-center">
-                                    {{ $b->batch_code }}
-                                </td>
                                 <td class="py-3 px-3.5 border-r border-slate-200 text-slate-900">
                                     <div class="font-semibold text-slate-900 truncate max-w-xs">{{ $b->file_name }}</div>
                                 </td>
@@ -184,7 +180,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="py-12 text-center text-slate-900 font-medium">
+                                <td colspan="7" class="py-12 text-center text-slate-900 font-medium">
                                     Belum ada file resi TikTok / Tokopedia yang diupload. Silakan upload file PDF di atas.
                                 </td>
                             </tr>

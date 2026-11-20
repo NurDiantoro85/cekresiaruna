@@ -218,7 +218,6 @@
                     <thead class="bg-[#495098] text-white text-[11px] font-bold uppercase tracking-wider">
                         <tr>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Kanal</th>
-                            <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Kode Batch</th>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Nama File</th>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Halaman</th>
                             <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Jumlah Resi</th>
@@ -245,9 +244,6 @@
                                             Semua Toko
                                         </span>
                                     @endif
-                                </td>
-                                <td class="py-3 px-3.5 border-r border-slate-200 font-mono text-xs font-bold text-slate-900 text-center">
-                                    {{ $b->batch_code }}
                                 </td>
                                 <td class="py-3 px-3.5 border-r border-slate-200 text-slate-900">
                                     <div class="font-semibold text-slate-900 truncate max-w-xs">{{ $b->file_name }}</div>
@@ -294,7 +290,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="py-12 text-center text-slate-900 font-medium">
+                                <td colspan="8" class="py-12 text-center text-slate-900 font-medium">
                                     Belum ada file PDF resi yang diupload. Silakan pilih salah satu opsi di atas.
                                 </td>
                             </tr>
