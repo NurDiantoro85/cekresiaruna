@@ -12,6 +12,7 @@ use App\Services\ResiParserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ResiController extends Controller
@@ -108,6 +109,13 @@ class ResiController extends Controller
             $fullPath = Storage::path($tempPath);
 
             $batch = $this->parserService->processPdf($fullPath, $originalName, $targetPlatform);
+
+            // Store PDF for page inspection & verification
+            $destDir = storage_path('app/batches_pdf');
+            if (!is_dir($destDir)) {
+                @mkdir($destDir, 0755, true);
+            }
+            @copy($fullPath, $destDir . '/' . $batch->batch_code . '.pdf');
 
             // Cleanup temp file
             if (file_exists($fullPath)) {
@@ -208,41 +216,69 @@ class ResiController extends Controller
         uasort($mappedSummary, fn($a, $b) => $b['total_qty'] <=> $a['total_qty']);
         uasort($unmappedSummary, fn($a, $b) => $b['total_qty'] <=> $a['total_qty']);
 
-        // 2. Rekapitulasi per Toko
-        $storeBreakdown = [];
-        $stores = Store::all();
-        foreach ($stores as $st) {
-            $storeBreakdown[$st->name] = [
-                'store' => $st,
-                'total_waybills' => 0,
-                'total_qty' => 0,
-                'items' => [],
-            ];
-        }
-
-        foreach ($batch->waybills as $wb) {
+        // 2. Rekapitulasi per Toko & Urutan Halaman PDF
+        $storeGroups = [];
+        foreach ($batch->waybills()->with('items.masterProduct', 'store')->orderBy('page_number')->get() as $wb) {
             $stName = $wb->store?->name ?? 'Lainnya';
-            if (!isset($storeBreakdown[$stName])) {
-                $storeBreakdown[$stName] = [
-                    'store' => null,
+            if (!isset($storeGroups[$stName])) {
+                $storeGroups[$stName] = [
+                    'store' => $wb->store,
                     'store_name' => $stName,
-                    'total_waybills' => 0,
+                    'platform' => $wb->store?->platform ?? $wb->platform,
+                    'courier' => $wb->store?->courier ?? $wb->courier,
+                    'first_page' => $wb->page_number,
+                    'last_page' => $wb->page_number,
                     'total_qty' => 0,
+                    'total_waybills' => 0,
                     'items' => [],
                 ];
             }
 
-            $storeBreakdown[$stName]['total_waybills']++;
-            $storeBreakdown[$stName]['total_qty'] += $wb->total_qty;
+            $storeGroups[$stName]['total_waybills']++;
+            $storeGroups[$stName]['total_qty'] += $wb->total_qty;
+            $storeGroups[$stName]['last_page'] = max($storeGroups[$stName]['last_page'], $wb->page_number);
 
             foreach ($wb->items as $it) {
-                $itemName = $it->masterProduct 
-                    ? "{$it->masterProduct->name} ({$it->masterProduct->variant})" 
-                    : "{$it->raw_product_name} [{$it->raw_variant}]";
-                
-                $storeBreakdown[$stName]['items'][$itemName] = ($storeBreakdown[$stName]['items'][$itemName] ?? 0) + $it->qty;
+                $varName = $it->masterProduct?->variant ?: ($it->raw_variant ?: ($it->raw_sku ?: $it->raw_product_name));
+                $itemKey = $varName;
+
+                if (!isset($storeGroups[$stName]['items'][$itemKey])) {
+                    $storeGroups[$stName]['items'][$itemKey] = [
+                        'variant_name' => $varName,
+                        'first_page' => $wb->page_number,
+                        'total_qty' => 0,
+                        'waybill_items' => [],
+                    ];
+                }
+
+                $storeGroups[$stName]['items'][$itemKey]['total_qty'] += $it->qty;
+                $storeGroups[$stName]['items'][$itemKey]['waybill_items'][] = [
+                    'waybill_id' => $wb->id,
+                    'waybill_no' => $wb->waybill_no,
+                    'order_no' => $wb->order_no,
+                    'page_number' => $wb->page_number,
+                    'recipient' => $wb->recipient,
+                    'city' => $wb->city,
+                    'courier' => $wb->courier,
+                    'platform' => $wb->platform,
+                    'raw_product_name' => $it->raw_product_name,
+                    'raw_sku' => $it->raw_sku ?: '-',
+                    'raw_variant' => $it->raw_variant ?: '-',
+                    'qty' => $it->qty,
+                ];
             }
         }
+
+        // Sort stores by PDF appearance
+        uasort($storeGroups, fn($a, $b) => $a['first_page'] <=> $b['first_page']);
+
+        // Sort items inside each store by PDF appearance
+        foreach ($storeGroups as $stName => &$group) {
+            uasort($group['items'], fn($a, $b) => $a['first_page'] <=> $b['first_page']);
+        }
+        unset($group);
+
+        $storeBreakdown = $storeGroups;
 
         $allMasterProducts = MasterProduct::orderBy('name')->get();
 
@@ -250,6 +286,7 @@ class ResiController extends Controller
             'batch',
             'mappedSummary',
             'unmappedSummary',
+            'storeGroups',
             'storeBreakdown',
             'allMasterProducts',
             'batchPlatform',
@@ -257,6 +294,26 @@ class ResiController extends Controller
             'isTiktok',
             'isAllStores'
         ));
+    }
+
+    /**
+     * Preview / View Original PDF
+     */
+    public function viewPdf(UploadBatch $batch)
+    {
+        $path = storage_path('app/batches_pdf/' . $batch->batch_code . '.pdf');
+        if (!file_exists($path)) {
+            if (file_exists('d:/Test.pdf')) {
+                $path = 'd:/Test.pdf';
+            } else {
+                abort(404, 'File PDF tidak ditemukan di server.');
+            }
+        }
+
+        return response()->file($path, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $batch->file_name . '"',
+        ]);
     }
 
     /**
@@ -298,99 +355,57 @@ class ResiController extends Controller
     {
         $batch->load(['waybills.items.masterProduct', 'waybills.store']);
 
-        $summary = [];
-        foreach ($batch->waybills as $wb) {
-            $storeName = $wb->store?->name ?? $wb->platform;
-            foreach ($wb->items as $item) {
-                $sku = $item->masterProduct?->sku ?? $item->raw_sku ?? '-';
-                $name = $item->masterProduct?->name ?? $item->raw_product_name;
-                $variant = $item->masterProduct?->variant ?? $item->raw_variant ?? '-';
-                $key = "{$name}||{$sku}||{$variant}";
+        $storeGroups = [];
+        foreach ($batch->waybills()->with('items.masterProduct', 'store')->orderBy('page_number')->get() as $wb) {
+            $stName = $wb->store?->name ?? 'Lainnya';
+            if (!isset($storeGroups[$stName])) {
+                $storeGroups[$stName] = [
+                    'store_name' => $stName,
+                    'first_page' => $wb->page_number,
+                    'items' => [],
+                ];
+            }
 
-                if (!isset($summary[$key])) {
-                    $summary[$key] = [
-                        'name' => $name,
-                        'sku' => $sku,
-                        'variant' => $variant,
+            foreach ($wb->items as $it) {
+                $varName = $it->masterProduct?->variant ?: ($it->raw_variant ?: ($it->raw_sku ?: $it->raw_product_name));
+                $itemKey = $varName;
+
+                if (!isset($storeGroups[$stName]['items'][$itemKey])) {
+                    $storeGroups[$stName]['items'][$itemKey] = [
+                        'variant_name' => $varName,
+                        'first_page' => $wb->page_number,
                         'total_qty' => 0,
-                        'stores' => [],
                     ];
                 }
-                $summary[$key]['total_qty'] += $item->qty;
-                $summary[$key]['stores'][$storeName] = ($summary[$key]['stores'][$storeName] ?? 0) + $item->qty;
+
+                $storeGroups[$stName]['items'][$itemKey]['total_qty'] += $it->qty;
             }
         }
 
-        $platformsInBatch = $batch->waybills->pluck('platform')->unique()->filter()->values()->all();
-        $isAllStores = ($batch->platform === 'Semua Toko' || $batch->platform === 'Mixed' || count($platformsInBatch) > 1);
-        $isShopee = !$isAllStores && ($batch->platform === 'Shopee' || (count($platformsInBatch) === 1 && $platformsInBatch[0] === 'Shopee'));
-        $isTiktok = !$isAllStores && ($batch->platform === 'TikTok Shop' || (count($platformsInBatch) === 1 && $platformsInBatch[0] === 'TikTok Shop'));
-        $batchPlatform = $isAllStores ? 'Semua Toko' : ($isShopee ? 'Shopee' : 'TikTok Shop');
+        uasort($storeGroups, fn($a, $b) => $a['first_page'] <=> $b['first_page']);
+        foreach ($storeGroups as &$group) {
+            uasort($group['items'], fn($a, $b) => $a['first_page'] <=> $b['first_page']);
+        }
+        unset($group);
 
-        $platformSlug = Str::slug($batchPlatform);
+        $platformSlug = Str::slug($batch->platform ?: 'rekap');
         $headers = [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"rekap-stok-{$platformSlug}-{$batch->batch_code}.csv\"",
         ];
 
-        return response()->stream(function () use ($summary, $isAllStores, $isShopee, $isTiktok) {
+        return response()->stream(function () use ($storeGroups) {
             $file = fopen('php://output', 'w');
-            
-            if ($isAllStores) {
-                fputcsv($file, ['No', 'Kode Acuan Packing (Kolom ke-2 Kanan)', 'Nama Produk', 'SKU', 'Seller SKU / Variasi', 'Total Qty Keluar', 'Rincian Toko']);
-            } elseif ($isShopee) {
-                fputcsv($file, ['No', 'Variasi (Acuan Utama Shopee)', 'SKU', 'Nama Produk', 'Total Qty Keluar', 'Rincian Toko']);
-            } elseif ($isTiktok) {
-                fputcsv($file, ['No', 'Seller SKU (Acuan Utama TikTok)', 'Variasi', 'Nama Produk', 'Total Qty Keluar', 'Rincian Toko']);
-            } else {
-                fputcsv($file, ['No', 'Nama Produk', 'SKU', 'Seller SKU / Variasi', 'Total Qty Keluar', 'Rincian Toko']);
-            }
-            
-            $i = 1;
-            foreach ($summary as $row) {
-                $rincian = [];
-                foreach ($row['stores'] as $st => $q) {
-                    $rincian[] = "{$st}: {$q} pcs";
-                }
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // UTF-8 BOM
 
-                if ($isAllStores) {
-                    fputcsv($file, [
-                        $i++,
-                        $row['variant'] ?: $row['sku'],
-                        $row['name'],
-                        $row['sku'],
-                        $row['variant'],
-                        $row['total_qty'],
-                        implode(' | ', $rincian),
-                    ]);
-                } elseif ($isShopee) {
-                    fputcsv($file, [
-                        $i++,
-                        $row['variant'],
-                        $row['sku'],
-                        $row['name'],
-                        $row['total_qty'],
-                        implode(' | ', $rincian),
-                    ]);
-                } elseif ($isTiktok) {
-                    fputcsv($file, [
-                        $i++,
-                        $row['sku'],
-                        $row['variant'],
-                        $row['name'],
-                        $row['total_qty'],
-                        implode(' | ', $rincian),
-                    ]);
-                } else {
-                    fputcsv($file, [
-                        $i++,
-                        $row['name'],
-                        $row['sku'],
-                        $row['variant'],
-                        $row['total_qty'],
-                        implode(' | ', $rincian),
-                    ]);
+            foreach ($storeGroups as $stName => $group) {
+                fputcsv($file, [$stName]);
+                fputcsv($file, ['No.', 'ceklis', 'varian/seller sku', 'qty']);
+                $no = 1;
+                foreach ($group['items'] as $it) {
+                    fputcsv($file, [$no++ . '.', '', $it['variant_name'], $it['total_qty']]);
                 }
+                fputcsv($file, []);
             }
             fclose($file);
         }, 200, $headers);

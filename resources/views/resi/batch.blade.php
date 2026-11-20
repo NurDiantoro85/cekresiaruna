@@ -3,7 +3,16 @@
 @section('title', 'Hasil Rekap Resi: ' . $batch->batch_code)
 
 @section('content')
-<div class="space-y-6">
+<div x-data="{
+    showResiModal: false,
+    activeModalItem: null,
+    activeModalStore: '',
+    openResiModal(item, storeName) {
+        this.activeModalItem = item;
+        this.activeModalStore = storeName;
+        this.showResiModal = true;
+    }
+}" class="space-y-6">
     <!-- Breadcrumb & Top Actions -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -143,174 +152,138 @@
 
     <!-- Tabs Container -->
     <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+        @php
+            $totalUniqueVariants = collect($storeGroups)->sum(fn($g) => count($g['items']));
+        @endphp
+
         <!-- Tab Headers -->
         <div class="border-b border-slate-200 bg-slate-50/70 px-6 pt-4 flex space-x-4">
             <button onclick="switchTab('stodo')" id="tab-btn-stodo" class="tab-btn pb-3.5 px-3 text-sm font-bold border-b-2 border-blue-600 text-blue-700 flex items-center space-x-2">
                 <span>📋 Rekap Stok Keluar</span>
-                <span class="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">{{ count($mappedSummary) }}</span>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">{{ $totalUniqueVariants }} Baris</span>
             </button>
             <button onclick="switchTab('stores')" id="tab-btn-stores" class="tab-btn pb-3.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2">
                 <span>🏪 Rincian per Toko</span>
-                <span class="px-2 py-0.5 rounded-full text-xs bg-slate-200 text-slate-700">4 Toko</span>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-slate-200 text-slate-700">{{ count($storeGroups) }} Toko</span>
             </button>
             <button onclick="switchTab('waybills')" id="tab-btn-waybills" class="tab-btn pb-3.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2">
                 <span>🚚 Detail Resi ({{ $batch->total_waybills }})</span>
             </button>
         </div>
 
-        <!-- TAB 1: REKAP STOK KELUAR (PRIMARY VIEW) -->
-        <div id="tab-content-stodo" class="p-6 space-y-4">
+        <!-- TAB 1: REKAP STOK KELUAR (DIPISAH PER TOKO & SESUAI URUTAN HALAMAN PDF) -->
+        <div id="tab-content-stodo" class="p-6 space-y-6">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
                 <div class="text-xs text-slate-600">
-                    💡 <strong>Tips Efisiensi Admin:</strong> Centang checkbox saat selesai pencatatan. Angka & varian acuan bisa di-copy instan dengan tombol <span class="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono">📋</span>.
+                    💡 <strong>Tips Efisiensi Admin:</strong> Rekap telah dipisah per toko dan diurutkan sesuai urutan halaman PDF. Klik pada <strong>nama varian</strong> untuk mengecek rincian resi dan halaman PDF tempat data terbaca.
                 </div>
                 <div class="flex items-center space-x-3">
-                    <input type="text" id="search-stodo" onkeyup="filterStodoTable()" placeholder="Cari varian / acuan packing..." class="text-xs border border-slate-300 rounded-xl px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none w-64">
+                    <input type="text" id="search-stodo" onkeyup="filterStodoTable()" placeholder="Cari varian / seller sku..." class="text-xs border border-slate-300 rounded-xl px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none w-64">
                     <button onclick="resetCheckboxes()" class="text-xs text-slate-500 hover:text-slate-800 font-medium underline">
                         Reset Centang
                     </button>
                 </div>
             </div>
 
-            <div class="overflow-x-auto rounded-xl border border-slate-200">
-                <table class="w-full text-left text-xs text-slate-700 border-collapse" id="table-stodo">
-                    <thead class="bg-[#495098] text-white text-[11px] font-bold uppercase tracking-wider">
-                        <tr>
-                            <th class="py-3 px-3 w-10 text-center border-r border-indigo-200/30">Status</th>
-                            @if($isShopee)
-                                <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">
-                                    Variasi (Acuan Utama Shopee)
-                                </th>
-                            @elseif($isTiktok)
-                                <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">
-                                    Seller SKU (Acuan Utama TikTok)
-                                </th>
-                            @elseif($isAllStores)
-                                <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">
-                                    Kode Acuan Packing (Kolom ke-2 Kanan)
-                                </th>
-                            @else
-                                <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Acuan Packing</th>
-                            @endif
-                            <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Brand</th>
-                            <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Total Qty Keluar</th>
-                            <th class="py-3 px-3.5 border-r border-indigo-200/30 text-center">Rincian Keluar per Toko</th>
-                            <th class="py-3 px-3.5 text-center">Copy</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200 font-medium bg-white text-slate-900">
-                        @forelse($mappedSummary as $key => $item)
-                            <tr class="hover:bg-slate-50/80 transition border-b border-slate-200 stodo-row text-slate-900" id="row-{{ $key }}" data-search="{{ $item['name'] }} {{ $item['sku'] }} {{ $item['variant'] }} {{ $item['seller_sku'] }}">
-                                <td class="py-3 px-3 text-center border-r border-slate-200">
-                                    <input type="checkbox" onchange="toggleRowCheck(this, '{{ $key }}')" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
-                                </td>
-                                @if($isShopee)
-                                    <!-- Variasi as Primary Column for Shopee -->
-                                    <td class="py-3 px-3.5 border-r border-slate-200 text-center">
-                                        @if(!empty($item['variant']) && $item['variant'] !== '-' && !in_array(strtolower($item['variant']), ['default', 'none', 'null', 'kosong']))
-                                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-50 text-slate-900 text-xs font-bold border border-slate-200">
-                                                {{ $item['variant'] }}
-                                            </span>
-                                        @else
-                                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-50 text-slate-900 text-xs font-bold border border-slate-200">
-                                                {{ $item['sku'] ?: 'Produk Tunggal' }}
-                                            </span>
-                                        @endif
-                                    </td>
-                                @elseif($isTiktok)
-                                    <!-- Seller SKU as Primary Column for TikTok -->
-                                    <td class="py-3 px-3.5 border-r border-slate-200 text-center">
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-50 text-slate-900 text-xs font-bold border border-slate-200">
-                                            {{ $item['seller_sku'] ?: ($item['sku'] ?: ($item['variant'] ?: '-')) }}
+            <!-- List of Stores with Section Divider -->
+            <div class="space-y-6" id="stodo-store-container">
+                @forelse($storeGroups as $stName => $group)
+                    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden store-section" data-store="{{ strtolower($stName) }}">
+                        <!-- Pembatas & Header Toko -->
+                        <div class="bg-[#495098] text-white px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-xl">🏪</span>
+                                <div>
+                                    <h3 class="font-black text-base tracking-tight text-white">{{ $stName }}</h3>
+                                    <div class="text-xs text-indigo-100 flex flex-wrap items-center gap-2 mt-0.5">
+                                        <span>{{ $group['platform'] }}</span>
+                                        <span>&bull;</span>
+                                        <span>Kurir: <strong class="text-white">{{ $group['courier'] }}</strong></span>
+                                        <span>&bull;</span>
+                                        <span class="bg-white/20 px-2 py-0.5 rounded font-mono font-bold text-[11px]">
+                                            Halaman PDF: #{{ $group['first_page'] }} - #{{ $group['last_page'] }}
                                         </span>
-                                    </td>
-                                @elseif($isAllStores)
-                                    <!-- Kolom ke-2 dari Kanan untuk Semua Toko -->
-                                    <td class="py-3 px-3.5 border-r border-slate-200 text-center">
-                                        <div class="flex flex-col gap-1.5 items-center">
-                                            @if(!empty($item['packing_codes']))
-                                                @foreach($item['packing_codes'] as $plat => $codes)
-                                                    @foreach($codes as $c)
-                                                        <div class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-50 text-slate-900 border border-slate-200 w-fit">
-                                                            <span class="text-[10px] opacity-75 mr-1 font-bold">{{ $plat === 'Shopee' ? 'Shopee' : 'TikTok' }}:</span> {{ $c }}
-                                                        </div>
-                                                    @endforeach
-                                                @endforeach
-                                            @else
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-50 text-slate-900 border border-slate-200">
-                                                    {{ $item['variant'] ?: $item['sku'] }}
-                                                </span>
-                                            @endif
-                                        </div>
-                                    </td>
-                                @else
-                                    <td class="py-3 px-3.5 border-r border-slate-200 text-center">
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-50 text-slate-900 text-xs font-bold border border-slate-200">
-                                            {{ $item['variant'] ?: ($item['sku'] ?: $item['name']) }}
-                                        </span>
-                                    </td>
-                                @endif
-                                <td class="py-3 px-3.5 border-r border-slate-200 text-center">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-50 text-slate-900 border border-slate-200">
-                                        {{ $item['brand'] }}
-                                    </span>
-                                </td>
-                                <td class="py-3 px-3.5 border-r border-slate-200 text-center">
-                                    <span class="inline-flex items-center justify-center px-3 py-1 rounded-xl text-xs font-bold bg-slate-50 text-slate-900 border border-slate-200">
-                                        {{ $item['total_qty'] }} <span class="text-[10px] font-bold ml-1 text-slate-700">{{ $item['unit'] }}</span>
-                                    </span>
-                                </td>
-                                <td class="py-3 px-3.5 border-r border-slate-200">
-                                    <div class="flex flex-wrap gap-1.5 text-xs">
-                                        @foreach($item['stores'] as $stName => $stQty)
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-900">
-                                                <strong class="mr-1 text-slate-900">{{ $stName }}:</strong> {{ $stQty }} pcs
-                                            </span>
-                                        @endforeach
                                     </div>
-                                </td>
-                                <td class="py-3 px-3.5 text-center">
-                                    @php
-                                        if ($isShopee) {
-                                            $val = (!empty($item['variant']) && $item['variant'] !== '-') ? $item['variant'] : $item['sku'];
-                                            $copyVal = ($val ?: $item['name']) . " ({$item['total_qty']})";
-                                        } elseif ($isTiktok) {
-                                            $copyVal = ($item['seller_sku'] ?: ($item['sku'] ?: $item['name'])) . " ({$item['total_qty']})";
-                                        } else {
-                                            $codesFlat = [];
-                                            if (!empty($item['packing_codes'])) {
-                                                foreach ($item['packing_codes'] as $cList) {
-                                                    $codesFlat = array_merge($codesFlat, $cList);
-                                                }
-                                            }
-                                            $copyVal = (!empty($codesFlat) ? implode(', ', array_unique($codesFlat)) : ($item['variant'] ?: $item['sku'])) . " ({$item['total_qty']})";
-                                        }
-                                    @endphp
-                                    <button onclick="copyText('{{ addslashes($copyVal) }}')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition" title="Copy Acuan Utama">
-                                        Copy
-                                    </button>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="9" class="py-8 text-center text-slate-900 font-medium">
-                                    Tidak ada data produk yang terpetakan.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="bg-white/15 px-3 py-1 rounded-xl font-bold">
+                                    {{ $group['total_waybills'] }} Resi
+                                </span>
+                                <span class="bg-emerald-400 text-slate-900 px-3 py-1 rounded-xl font-extrabold shadow-2xs">
+                                    {{ $group['total_qty'] }} pcs
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Tabel Sesuai Format Mockup Excel: No. | ceklis | varian/seller sku | qty -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-50 text-slate-700 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-2.5 px-3 w-14 text-center border-r border-slate-200">No.</th>
+                                        <th class="py-2.5 px-3 w-16 text-center border-r border-slate-200">ceklis</th>
+                                        <th class="py-2.5 px-4 border-r border-slate-200">varian/seller sku</th>
+                                        <th class="py-2.5 px-4 w-28 text-center">qty</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 font-medium bg-white text-slate-900">
+                                    @php $no = 1; @endphp
+                                    @forelse($group['items'] as $itemKey => $item)
+                                        @php $rowId = 'stodo_' . Str::slug($stName . '_' . $itemKey); @endphp
+                                        <tr class="hover:bg-blue-50/40 transition border-b border-slate-100 stodo-row" id="row-{{ $rowId }}" data-search="{{ strtolower($stName . ' ' . $item['variant_name']) }}">
+                                            <td class="py-2.5 px-3 text-center border-r border-slate-100 text-slate-500 font-bold">
+                                                {{ $no++ }}.
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center border-r border-slate-100">
+                                                <input type="checkbox" onchange="toggleRowCheck(this, '{{ $rowId }}')" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
+                                            </td>
+                                            <td class="py-2.5 px-4 border-r border-slate-100">
+                                                <div class="flex items-center justify-between group">
+                                                    <button type="button" @click="openResiModal({{ json_encode($item) }}, '{{ addslashes($stName) }}')" class="text-left font-bold text-slate-900 hover:text-blue-600 transition flex items-center gap-2 cursor-pointer">
+                                                        <span class="text-sm">{{ $item['variant_name'] }}</span>
+                                                        <span class="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md font-semibold opacity-80 group-hover:opacity-100 group-hover:bg-blue-600 group-hover:text-white transition flex items-center gap-1">
+                                                            🔍 Cek Resi ({{ count($item['waybill_items']) }})
+                                                        </span>
+                                                    </button>
+                                                    <button type="button" onclick="copyText('{{ addslashes($item['variant_name'] . ' (' . $item['total_qty'] . ')') }}')" class="text-[10px] text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 px-2 py-0.5 rounded border border-slate-200 transition opacity-0 group-hover:opacity-100" title="Copy Varian & Qty">
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td class="py-2.5 px-4 text-center font-black text-slate-900 text-sm">
+                                                <span class="inline-flex items-center px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold">
+                                                    {{ $item['total_qty'] }} <span class="text-[11px] font-normal ml-1 text-emerald-600">pcs</span>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="py-6 text-center text-slate-400">Tidak ada variasi di toko ini.</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @empty
+                    <div class="py-12 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+                        Tidak ada data toko yang terdeteksi.
+                    </div>
+                @endforelse
             </div>
 
             <!-- Sticky Summary Bar -->
             <div class="p-4 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
                 <div class="flex items-center space-x-4">
-                    <span>Total Produk: <strong class="text-blue-300 font-bold">{{ count($mappedSummary) }} Jenis</strong></span>
+                    <span>Total Toko: <strong class="text-blue-300 font-bold">{{ count($storeGroups) }} Toko</strong></span>
+                    <span>&bull;</span>
+                    <span>Total Variasi: <strong class="text-indigo-300 font-bold">{{ $totalUniqueVariants }} Baris</strong></span>
                     <span>&bull;</span>
                     <span>Total Keseluruhan Barang Keluar: <strong class="text-emerald-300 font-bold">{{ $batch->total_qty }} pcs</strong></span>
                 </div>
                 <div>
-                    Progress Pengecekan: <span id="checked-counter" class="font-bold text-amber-300">0</span> / {{ count($mappedSummary) }} selesai dicek
+                    Progress Pengecekan: <span id="checked-counter" class="font-bold text-amber-300">0</span> selesai dicek
                 </div>
             </div>
         </div>
@@ -318,12 +291,14 @@
         <!-- TAB 2: RINCIAN PER TOKO -->
         <div id="tab-content-stores" class="p-6 hidden space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                @foreach($storeBreakdown as $stName => $stData)
+                @foreach($storeGroups as $stName => $stData)
                     <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200">
                         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
                             <div>
                                 <h3 class="font-extrabold text-slate-900 text-base">{{ $stName }}</h3>
-                                <p class="text-xs text-slate-500">{{ $stData['store']?->platform ?? '-' }} &bull; {{ $stData['store']?->courier ?? '-' }}</p>
+                                <p class="text-xs text-slate-500">
+                                    {{ $stData['platform'] ?? '-' }} &bull; Kurir: {{ $stData['courier'] ?? '-' }} &bull; Hal: #{{ $stData['first_page'] }} - #{{ $stData['last_page'] }}
+                                </p>
                             </div>
                             <div class="text-right">
                                 <div class="text-xl font-black text-blue-600">{{ $stData['total_qty'] }} <span class="text-xs text-slate-400">pcs</span></div>
@@ -332,12 +307,17 @@
                         </div>
 
                         <div class="mt-4">
-                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Daftar Produk Keluar Toko Ini:</div>
-                            <div class="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                                @forelse($stData['items'] as $itName => $itQty)
-                                    <div class="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-white border border-slate-100">
-                                        <span class="text-slate-800 font-medium truncate max-w-xs">{{ $itName }}</span>
-                                        <span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{{ $itQty }} pcs</span>
+                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Daftar Produk Keluar Toko Ini (Klik untuk cek resi):</div>
+                            <div class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                                @forelse($stData['items'] as $itKey => $it)
+                                    <div class="flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-white border border-slate-200/80 hover:border-blue-400 hover:shadow-2xs transition group">
+                                        <button type="button" @click="openResiModal({{ json_encode($it) }}, '{{ addslashes($stName) }}')" class="text-left font-bold text-slate-800 hover:text-blue-600 truncate max-w-xs cursor-pointer flex items-center gap-2">
+                                            <span>{{ $it['variant_name'] }}</span>
+                                            <span class="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 opacity-70 group-hover:opacity-100">
+                                                🔍 Cek Resi ({{ count($it['waybill_items']) }})
+                                            </span>
+                                        </button>
+                                        <span class="font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-lg">{{ $it['total_qty'] }} pcs</span>
                                     </div>
                                 @empty
                                     <div class="text-xs text-slate-400 py-3 text-center">Tidak ada pesanan dari toko ini pada file PDF ini.</div>
@@ -408,10 +388,102 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Detail Resi Terbaca -->
+    <div x-show="showResiModal" x-cloak class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div @click.away="showResiModal = false" class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white p-5 flex items-start justify-between">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🔍</span>
+                        <h3 class="text-lg font-black text-white" x-text="activeModalItem?.variant_name"></h3>
+                    </div>
+                    <p class="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-2">
+                        <span>Toko: <strong class="text-white" x-text="activeModalStore"></strong></span>
+                        <span>&bull;</span>
+                        <span>Total Qty: <strong class="text-emerald-400" x-text="(activeModalItem?.total_qty || 0) + ' pcs'"></strong></span>
+                        <span>&bull;</span>
+                        <span>Ditemukan di: <strong class="text-blue-300" x-text="(activeModalItem?.waybill_items?.length || 0) + ' Resi / Halaman'"></strong></span>
+                    </p>
+                </div>
+                <button @click="showResiModal = false" class="text-slate-400 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
+            </div>
+
+            <!-- Modal Info Banner -->
+            <div class="bg-blue-50/70 px-5 py-3 border-b border-blue-100 text-xs text-blue-900 flex items-center justify-between">
+                <span>Daftar resi di file PDF yang membaca varian ini. Anda dapat memeriksa hasil teks yang terbaca dan membuka halaman PDF langsung:</span>
+            </div>
+
+            <!-- Modal Body (List of Waybills) -->
+            <div class="p-5 space-y-3 overflow-y-auto flex-1">
+                <template x-for="(wb, idx) in (activeModalItem?.waybill_items || [])" :key="idx">
+                    <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 hover:border-blue-300 transition space-y-2.5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black text-xs font-mono shadow-2xs">
+                                    Hal #<span x-text="wb.page_number"></span>
+                                </span>
+                                <div>
+                                    <div class="font-mono font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                                        <span x-text="wb.waybill_no"></span>
+                                        <button type="button" @click="copyText(wb.waybill_no)" class="text-[10px] text-slate-400 hover:text-slate-700 font-sans px-1 rounded bg-white border border-slate-200" title="Copy Resi">Copy</button>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500" x-show="wb.order_no">
+                                        No. Pesanan: <span class="font-mono" x-text="wb.order_no"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
+                                    Qty: <strong x-text="wb.qty + ' pcs'"></strong>
+                                </span>
+                                <a :href="'/batch/' + batchId + '/pdf#page=' + wb.page_number" target="_blank" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold text-blue-700 bg-white border border-blue-300 hover:bg-blue-50 shadow-2xs transition">
+                                    📄 Buka Hal #<span x-text="wb.page_number"></span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Teks Asli yang Terbaca dari Resi -->
+                        <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-1.5 text-xs">
+                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                                Bagian Resi yang Terbaca:
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                    <span class="text-[10px] text-slate-400 font-bold block">Kolom SKU di Resi:</span>
+                                    <span class="font-mono font-bold text-slate-800" x-text="wb.raw_sku || '-'"></span>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                    <span class="text-[10px] text-slate-400 font-bold block">Kolom Variasi di Resi:</span>
+                                    <span class="font-mono font-bold text-blue-700" x-text="wb.raw_variant || '-'"></span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <span class="text-[10px] text-slate-400 font-bold block">Nama Produk di Resi:</span>
+                                <span class="text-slate-700 font-medium" x-text="wb.raw_product_name"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 p-4 border-t border-slate-200 flex justify-end">
+                <button @click="showResiModal = false" class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('scripts')
 <script>
+    const batchId = "{{ $batch->id }}";
+    const storageKey = 'stodo_checked_' + batchId;
+
     // Tab Switching
     function switchTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -429,9 +501,6 @@
     }
 
     // Row Checkbox for StoDo input tracker
-    const batchId = "{{ $batch->id }}";
-    const storageKey = 'stodo_checked_' + batchId;
-
     function getCheckedRows() {
         return JSON.parse(localStorage.getItem(storageKey) || '[]');
     }
@@ -446,10 +515,10 @@
         let checked = getCheckedRows();
 
         if (checkbox.checked) {
-            row.classList.add('checked-row');
+            if (row) row.classList.add('checked-row');
             if (!checked.includes(rowKey)) checked.push(rowKey);
         } else {
-            row.classList.remove('checked-row');
+            if (row) row.classList.remove('checked-row');
             checked = checked.filter(k => k !== rowKey);
         }
         saveCheckedRows(checked);
@@ -458,7 +527,7 @@
     function resetCheckboxes() {
         if (confirm('Reset seluruh checklist input StoDo untuk batch ini?')) {
             localStorage.removeItem(storageKey);
-            document.querySelectorAll('#table-stodo input[type="checkbox"]').forEach(cb => {
+            document.querySelectorAll('#tab-content-stodo input[type="checkbox"]').forEach(cb => {
                 cb.checked = false;
             });
             document.querySelectorAll('.stodo-row').forEach(r => r.classList.remove('checked-row'));
@@ -486,21 +555,44 @@
         updateCounter();
     });
 
-    // Search filter for StoDo Table
+    // Search filter for StoDo Table (Hides empty store sections when filtering)
     function filterStodoTable() {
-        const q = document.getElementById('search-stodo').value.toLowerCase();
-        document.querySelectorAll('.stodo-row').forEach(row => {
-            const txt = (row.innerText + ' ' + (row.getAttribute('data-search') || '')).toLowerCase();
-            row.style.display = txt.includes(q) ? '' : 'none';
+        const q = document.getElementById('search-stodo').value.toLowerCase().trim();
+        document.querySelectorAll('.store-section').forEach(section => {
+            let visibleCount = 0;
+            section.querySelectorAll('.stodo-row').forEach(row => {
+                const txt = (row.innerText + ' ' + (row.getAttribute('data-search') || '')).toLowerCase();
+                const match = txt.includes(q);
+                row.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+            section.style.display = (visibleCount > 0 || q === '') ? '' : 'none';
         });
     }
 
     // Search filter for Waybill Table
     function filterWaybillTable() {
-        const q = document.getElementById('search-waybill').value.toLowerCase();
+        const q = document.getElementById('search-waybill').value.toLowerCase().trim();
         document.querySelectorAll('.waybill-row').forEach(row => {
             const txt = row.innerText.toLowerCase();
             row.style.display = txt.includes(q) ? '' : 'none';
+        });
+    }
+
+    // Copy to clipboard helper
+    function copyText(txt) {
+        if (!txt) return;
+        navigator.clipboard.writeText(txt).then(() => {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-5 right-5 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl z-50 transition-all border border-slate-700 flex items-center gap-2';
+            toast.innerHTML = '<span>📋</span> <span>Berhasil disalin: <strong>' + txt + '</strong></span>';
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }).catch(err => {
+            console.error('Copy failed: ', err);
         });
     }
 </script>

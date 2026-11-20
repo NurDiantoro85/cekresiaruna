@@ -11,6 +11,7 @@ Route::get('/resi/shopee', [ResiController::class, 'shopee'])->name('resi.shopee
 Route::get('/resi/tiktok', [ResiController::class, 'tiktok'])->name('resi.tiktok');
 Route::post('/upload', [ResiController::class, 'upload'])->name('resi.upload');
 Route::get('/batch/{batch}', [ResiController::class, 'showBatch'])->name('resi.batch');
+Route::get('/batch/{batch}/pdf', [ResiController::class, 'viewPdf'])->name('resi.pdf');
 Route::post('/batch/{batch}/quick-map', [ResiController::class, 'quickMap'])->name('resi.quickMap');
 Route::get('/batch/{batch}/export-csv', [ResiController::class, 'exportCsv'])->name('resi.export');
 Route::delete('/batch/{batch}', [ResiController::class, 'destroy'])->name('resi.delete');
