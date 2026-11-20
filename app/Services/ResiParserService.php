@@ -149,18 +149,34 @@ class ResiParserService
     protected function resolveStore(string $sender, string $platform, string $courier): ?Store
     {
         $senderLower = strtolower($sender);
-        $brand = 'Aruna';
+        $platformLower = strtolower($platform);
+        $courierLower = strtolower($courier);
 
-        if (str_contains($senderLower, 'moveda') || str_contains($senderLower, 'bandana buff')) {
-            $brand = 'Moveda';
+        // TikTok Shop / J&T Express
+        if (str_contains($platformLower, 'tiktok') || str_contains($platformLower, 'tokopedia') || str_contains($courierLower, 'j&t')) {
+            if (str_contains($senderLower, 'bandana buff')) {
+                return Store::where('name', 'like', '%Bandana Buff%')->first()
+                    ?? Store::where('platform', 'like', '%TikTok%')->where('brand', 'Moveda')->first()
+                    ?? Store::where('id', 4)->first();
+            }
+            if (str_contains($senderLower, 'moveda')) {
+                return Store::where('platform', 'like', '%TikTok%')->where('brand', 'Moveda')->first()
+                    ?? Store::where('name', 'like', '%Bandana Buff%')->first();
+            }
+            return Store::where('brand', 'Aruna')->where('platform', 'like', '%TikTok%')->first()
+                ?? Store::where('id', 2)->first()
+                ?? Store::first();
         }
 
-        return Store::where('brand', $brand)
-            ->where(function ($q) use ($platform, $courier) {
-                $q->where('platform', 'like', "%{$platform}%")
-                  ->orWhere('courier', 'like', "%{$courier}%");
-            })
-            ->first() ?? Store::first();
+        // Shopee / SPX Express
+        if (str_contains($senderLower, 'moveda') || str_contains($senderLower, 'bandana buff')) {
+            return Store::where('brand', 'Moveda')->where('platform', 'like', '%Shopee%')->first()
+                ?? Store::where('id', 3)->first();
+        }
+
+        return Store::where('brand', 'Aruna')->where('platform', 'like', '%Shopee%')->first()
+            ?? Store::where('id', 1)->first()
+            ?? Store::first();
     }
 
     /**
@@ -217,53 +233,49 @@ class ResiParserService
             }
         }
 
-        // 2. Direct match on sku + variant (Standard Shopee pattern)
-        if ($rawSkuTrim !== '') {
-            $query = MasterProduct::where('sku', $rawSkuTrim);
-            if ($rawVarTrim !== '') {
-                $mp = (clone $query)->where('variant', $rawVarTrim)->first();
-                if ($mp) return $mp;
-            } else {
-                $mp = (clone $query)->where(function ($q) {
-                    $q->whereNull('variant')->orWhere('variant', '')->orWhere('variant', 'Default');
-                })->first();
-                if ($mp) return $mp;
-            }
+        // 2. Direct match on sku + variant (when both are present)
+        if ($rawSkuTrim !== '' && $rawVarTrim !== '') {
+            $mp = MasterProduct::where('sku', $rawSkuTrim)->where('variant', $rawVarTrim)->first();
+            if ($mp) return $mp;
+
+            $mp = MasterProduct::where('seller_sku', $rawSkuTrim)->where('variant', $rawVarTrim)->first();
+            if ($mp) return $mp;
         }
 
-        // 3. Direct match on seller_sku + variant (Standard Tokopedia/TikTok pattern)
-        if ($rawSkuTrim !== '') {
-            $query = MasterProduct::where('seller_sku', $rawSkuTrim);
-            if ($rawVarTrim !== '') {
-                $mp = (clone $query)->where('variant', $rawVarTrim)->first();
-                if ($mp) return $mp;
-            } else {
-                $mp = (clone $query)->where(function ($q) {
-                    $q->whereNull('variant')->orWhere('variant', '')->orWhere('variant', 'Default');
-                })->first();
-                if ($mp) return $mp;
-            }
-        }
+        // 3. Match against MasterVariant Dictionary
+        $primaryAcuan = ($platform === 'Shopee') ? ($rawVarTrim ?: $rawSkuTrim) : ($rawSkuTrim ?: $rawVarTrim);
+        $matchedVariantName = $this->matchAgainstVariantDictionary($primaryAcuan, $rawSkuTrim, $rawVarTrim);
 
-        // 4. CASE A: Single-Variant Product (Variasi in resi is EMPTY)
-        if ($rawVarTrim === '') {
-            // For TikTok, check if rawSkuTrim actually contains a variant from dictionary (e.g. 'Hdbn Flower Pink')
-            if (in_array(strtolower($platform), ['tiktok shop', 'tiktok', 'tokopedia'])) {
-                $matchedVariantName = $this->matchAgainstVariantDictionary($rawSkuTrim, $rawSkuTrim, '');
-                if ($matchedVariantName) {
-                    $mp = MasterProduct::where('variant', $matchedVariantName)->first();
-                    if ($mp) {
-                        ProductMapping::firstOrCreate([
-                            'master_product_id' => $mp->id,
-                            'platform' => $platform,
-                            'raw_sku' => $rawSkuTrim,
-                            'raw_variant' => '',
-                        ]);
-                        return $mp;
-                    }
+        if ($matchedVariantName) {
+            $mp = MasterProduct::where('variant', $matchedVariantName)->first();
+            if (!$mp) {
+                $cleanName = trim($rawName) ?: "Produk {$matchedVariantName}";
+                $brand = 'Aruna';
+                if (str_contains(strtolower($cleanName . ' ' . $sender), 'moveda') || str_contains(strtolower($cleanName . ' ' . $sender), 'bandana buff')) {
+                    $brand = 'Moveda';
                 }
+                $mp = MasterProduct::create([
+                    'name' => $cleanName,
+                    'variant' => $matchedVariantName,
+                    'sku' => $matchedVariantName,
+                    'seller_sku' => $rawSkuTrim ?: $matchedVariantName,
+                    'brand' => $brand,
+                    'unit' => 'pcs',
+                ]);
             }
+            if ($mp) {
+                ProductMapping::firstOrCreate([
+                    'master_product_id' => $mp->id,
+                    'platform' => $platform,
+                    'raw_sku' => $rawSkuTrim,
+                    'raw_variant' => $rawVarTrim,
+                ]);
+                return $mp;
+            }
+        }
 
+        // 4. CASE A: Single-Variant Product (Variasi in resi is EMPTY and not in dictionary)
+        if ($rawVarTrim === '') {
             // Check if product exists by SKU
             if ($rawSkuTrim !== '') {
                 $existing = MasterProduct::where('sku', $rawSkuTrim)
@@ -277,7 +289,7 @@ class ResiParserService
             // Auto-create single-variant MasterProduct (Produk Tunggal)
             $cleanName = trim($rawName) ?: ($rawSkuTrim ?: 'Produk Tanpa Nama');
             $brand = 'Aruna';
-            if (str_contains(strtolower($cleanName . ' ' . $sender), 'moveda')) {
+            if (str_contains(strtolower($cleanName . ' ' . $sender), 'moveda') || str_contains(strtolower($cleanName . ' ' . $sender), 'bandana buff')) {
                 $brand = 'Moveda';
             }
 
@@ -302,10 +314,8 @@ class ResiParserService
             return $mp;
         }
 
-        // 5. CASE B: Multi-Variant Product (Variasi in resi is NOT empty)
-        $primaryAcuan = ($platform === 'Shopee') ? $rawVarTrim : ($rawSkuTrim ?: $rawVarTrim);
-        $matchedVariantName = $this->matchAgainstVariantDictionary($primaryAcuan, $rawSkuTrim, $rawVarTrim);
-        $finalVariant = $matchedVariantName ?: $rawVarTrim;
+        // 5. CASE B: Multi-Variant Product (Variasi in resi is NOT empty and not in dictionary)
+        $finalVariant = $rawVarTrim;
 
         // Check existing MasterProduct with this variant
         $mp = MasterProduct::where('variant', $finalVariant)->first();
@@ -388,6 +398,26 @@ class ResiParserService
             }
             if ($candSku !== '' && (str_ends_with($candSku, $norm) || str_contains($candSku, $norm))) {
                 return $origName;
+            }
+        }
+
+        // 3. Try stripping known category prefixes (e.g. Bandana, Headband, ArmSleeve, Slayer, etc.)
+        $prefixes = ['bandana', 'headband', 'armsleeve', 'arm', 'slayer', 'headwear', 'reflektive', 'baff', 'buff', 'outer', 'jersey'];
+        foreach ([$candVar, $candAcuan, $candSku] as $cand) {
+            if ($cand === '') continue;
+            foreach ($prefixes as $pfx) {
+                if (str_starts_with($cand, $pfx)) {
+                    $stripped = substr($cand, strlen($pfx));
+                    if (isset($variantsCache[$stripped])) {
+                        return $variantsCache[$stripped];
+                    }
+                    foreach ($variantsCache as $norm => $origName) {
+                        if (strlen($norm) < 3) continue;
+                        if (str_ends_with($stripped, $norm) || str_contains($stripped, $norm)) {
+                            return $origName;
+                        }
+                    }
+                }
             }
         }
 

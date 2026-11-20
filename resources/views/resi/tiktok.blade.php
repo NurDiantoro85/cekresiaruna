@@ -83,6 +83,7 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                         <span>Pilih File PDF TikTok / Tokped</span>
                     </label>
+                    <p class="text-xs text-slate-400 mt-2 font-medium">atau tarik & lepas (drag and drop) file PDF langsung ke kotak ini</p>
                     <input type="file" id="pdf_file_tiktok" name="pdf_file" accept="application/pdf" class="hidden" required onchange="handleTiktokFileSelect(this)">
                     
                     <div id="selected-file-info" class="mt-4 hidden p-3 rounded-xl bg-slate-100 border border-slate-300 text-xs text-slate-700 flex items-center space-x-2">
@@ -217,5 +218,38 @@
         document.getElementById('upload-loading').classList.remove('hidden');
         document.getElementById('upload-loading').classList.add('flex');
     });
+
+    // Drag and Drop support
+    const dropZone = document.getElementById('upload-section');
+    const fileInput = document.getElementById('pdf_file_tiktok');
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('border-slate-800', 'bg-slate-100/80', 'scale-[1.005]');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('border-slate-800', 'bg-slate-100/80', 'scale-[1.005]');
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length > 0) {
+            if (files[0].type === 'application/pdf' || files[0].name.toLowerCase().endsWith('.pdf')) {
+                fileInput.files = files;
+                handleTiktokFileSelect(fileInput);
+            } else {
+                alert('File yang diupload harus berformat PDF!');
+            }
+        }
+    }, false);
 </script>
 @endsection

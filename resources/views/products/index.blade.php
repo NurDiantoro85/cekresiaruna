@@ -129,19 +129,95 @@
         </div>
 
         <!-- TAB 2: KAMUS VARIASI / SELLER SKU -->
-        <div id="ptab-content-filters" class="p-6 hidden space-y-6">
+        <div id="ptab-content-filters" class="p-6 hidden space-y-6" x-data="{
+            selectMode: false,
+            selected: [],
+            allIds: {{ json_encode($variants->pluck('id')) }},
+            toggleSelect(id) {
+                const idx = this.selected.indexOf(id);
+                if (idx > -1) {
+                    this.selected.splice(idx, 1);
+                } else {
+                    this.selected.push(id);
+                }
+            },
+            selectAll() {
+                if (this.selected.length === this.allIds.length) {
+                    this.selected = [];
+                } else {
+                    this.selected = [...this.allIds];
+                }
+            },
+            deleteSelected() {
+                if (this.selected.length === 0) {
+                    alert('Silakan pilih minimal 1 variasi yang ingin dihapus.');
+                    return;
+                }
+                if (confirm(`Apakah Anda yakin ingin menghapus ${this.selected.length} variasi yang dipilih?`)) {
+                    document.getElementById('input-delete-all').value = '0';
+                    document.getElementById('form-bulk-delete-variants').submit();
+                }
+            },
+            deleteAll() {
+                if (confirm('PERINGATAN: Apakah Anda yakin ingin menghapus SEMUA variasi di dalam kamus? Data variasi yang dihapus tidak dapat dikembalikan.')) {
+                    document.getElementById('input-delete-all').value = '1';
+                    document.getElementById('form-bulk-delete-variants').submit();
+                }
+            }
+        }">
             <div class="bg-blue-50/60 p-4 rounded-2xl border border-blue-100 text-xs text-slate-700">
                 💡 <strong>Kamus Variasi & Seller SKU:</strong> Berisi daftar resmi seluruh variasi dan Seller SKU produk Anda. Saat Anda mengupload PDF resi, sistem secara otomatis membaca kolom acuan dan mencocokkannya ke kamus ini serta otomatis menyimpan produk baru ke daftar master produk.
             </div>
 
             <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4">
-                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                     <div>
                         <h3 class="font-extrabold text-slate-900 text-sm">Daftar Variasi & Seller SKU</h3>
                         <p class="text-[11px] text-slate-400">Variasi motif, warna, ukuran, atau Seller SKU ekspedisi</p>
                     </div>
-                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">{{ $variants->count() }} Variasi</span>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                            {{ $variants->count() }} Variasi
+                        </span>
+
+                        <!-- Normal Action Buttons -->
+                        <div x-show="!selectMode" class="flex items-center gap-2">
+                            <button type="button" @click="selectMode = true" class="px-3 py-1.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs shadow-2xs transition flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                                <span>Pilih (Select)</span>
+                            </button>
+                            <button type="button" @click="deleteAll()" class="px-3 py-1.5 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-red-600 font-bold text-xs shadow-2xs transition flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                <span>Hapus Semua</span>
+                            </button>
+                        </div>
+
+                        <!-- Selection Mode Action Buttons -->
+                        <div x-show="selectMode" x-cloak class="flex flex-wrap items-center gap-2">
+                            <button type="button" @click="selectAll()" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs shadow-2xs transition">
+                                <span x-text="selected.length === allIds.length ? 'Batal Pilih Semua' : 'Pilih Semua'">Pilih Semua</span>
+                            </button>
+                            <button type="button" @click="deleteSelected()" :disabled="selected.length === 0" class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                <span>Hapus Terpilih (<strong x-text="selected.length">0</strong>)</span>
+                            </button>
+                            <button type="button" @click="selectMode = false; selected = []" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition">
+                                Selesai
+                            </button>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Hidden Bulk Delete Form -->
+                <form id="form-bulk-delete-variants" action="{{ route('variants.bulkDestroy') }}" method="POST" class="hidden">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="delete_all" id="input-delete-all" value="0">
+                    <template x-for="id in selected" :key="id">
+                        <input type="hidden" name="ids[]" :value="id">
+                    </template>
+                </form>
 
                 <!-- Add Variant Form -->
                 <form action="{{ route('variants.store') }}" method="POST" class="flex gap-2 max-w-md">
@@ -155,9 +231,27 @@
                 <!-- Variant List Badges -->
                 <div class="flex flex-wrap gap-2 max-h-96 overflow-y-auto pr-1">
                     @forelse($variants as $var)
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-800 shadow-2xs">
+                        <span 
+                            @click="if (selectMode) toggleSelect({{ $var->id }})"
+                            :class="{
+                                'bg-blue-100 border-blue-400 text-blue-900 ring-1 ring-blue-400': selectMode && selected.includes({{ $var->id }}),
+                                'bg-white border-slate-200 text-slate-800 hover:border-slate-300': !selectMode || !selected.includes({{ $var->id }}),
+                                'cursor-pointer select-none': selectMode
+                            }"
+                            class="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-semibold border shadow-2xs transition">
+                            
+                            <!-- Selection Checkbox -->
+                            <input 
+                                x-show="selectMode" 
+                                type="checkbox" 
+                                :checked="selected.includes({{ $var->id }})" 
+                                @click.stop="toggleSelect({{ $var->id }})"
+                                class="w-3.5 h-3.5 mr-1.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer">
+                            
                             <span>{{ $var->name }}</span>
-                            <form action="{{ route('variants.destroy', $var->id) }}" method="POST" class="inline ml-1.5" onsubmit="return confirm('Hapus variasi {{ $var->name }}?')">
+                            
+                            <!-- Individual Delete Button (hidden in selectMode) -->
+                            <form x-show="!selectMode" action="{{ route('variants.destroy', $var->id) }}" method="POST" class="inline ml-1.5" onsubmit="return confirm('Hapus variasi {{ $var->name }}?')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="text-slate-400 hover:text-red-600 font-bold ml-1">&times;</button>

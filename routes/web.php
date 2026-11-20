@@ -42,6 +42,7 @@ Route::delete('/skus/{sku}', [MasterProductController::class, 'destroySku'])->na
 Route::post('/seller-skus', [MasterProductController::class, 'storeSellerSku'])->name('seller_skus.store');
 Route::delete('/seller-skus/{sellerSku}', [MasterProductController::class, 'destroySellerSku'])->name('seller_skus.destroy');
 
+Route::delete('/variants/bulk-destroy', [MasterProductController::class, 'bulkDestroyVariants'])->name('variants.bulkDestroy');
 Route::post('/variants', [MasterProductController::class, 'storeVariant'])->name('variants.store');
 Route::delete('/variants/{variant}', [MasterProductController::class, 'destroyVariant'])->name('variants.destroy');
 

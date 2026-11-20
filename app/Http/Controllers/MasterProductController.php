@@ -124,6 +124,23 @@ class MasterProductController extends Controller
         return back()->with('success', 'Variasi / Seller SKU dihapus.');
     }
 
+    public function bulkDestroyVariants(Request $request)
+    {
+        if ($request->boolean('delete_all')) {
+            $count = MasterVariant::count();
+            MasterVariant::query()->delete();
+            return back()->with('success', "Seluruh ({$count}) Variasi & Seller SKU berhasil dihapus.");
+        }
+
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:master_variants,id',
+        ]);
+
+        $count = MasterVariant::whereIn('id', $validated['ids'])->delete();
+        return back()->with('success', "{$count} Variasi / Seller SKU berhasil dihapus.");
+    }
+
     // Product Mapping Methods
     public function addMapping(Request $request)
     {

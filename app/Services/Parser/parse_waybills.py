@@ -60,17 +60,19 @@ def parse_shopee_page(page, page_num):
             order_no = pesan_match.group(1)
 
     # Sender Name
+    raw_text = page.extract_text() or ""
+    raw_lower = (raw_text + " " + full_text).lower()
     sender = ""
-    sender_match = re.search(r'Pengirim:\s*([A-Za-z0-9\s]+?)(?:628|\d{9,}|KOTA|Jl|\n|Penerima)', full_text)
-    if sender_match:
-        sender = clean_text(sender_match.group(1))
-    if not sender or len(sender) < 3:
-        if "aruna" in full_text.lower():
-            sender = "Aruna Sportswear Indonesia"
-        elif "moveda" in full_text.lower():
-            sender = "Moveda Activewear Indonesia"
-        elif "bandana buff" in full_text.lower():
-            sender = "Bandana Buff Outdoor Indonesia"
+    if "bandana buff" in raw_lower:
+        sender = "Bandana Buff Outdoor Indonesia"
+    elif "moveda" in raw_lower:
+        sender = "Moveda Activewear Indonesia"
+    elif "aruna" in raw_lower:
+        sender = "Aruna Sportswear Indonesia"
+    else:
+        sender_match = re.search(r'Pengirim:\s*([A-Za-z0-9\s]+?)(?:628|\d{9,}|KOTA|Jl|\n|Penerima)', full_text)
+        if sender_match and not any(kw in sender_match.group(1).lower() for kw in ['pesanan', 'tidak', 'ya', 'cod']):
+            sender = clean_text(sender_match.group(1))
 
     # Recipient Name
     recipient = ""
@@ -114,11 +116,11 @@ def parse_shopee_page(page, page_num):
                 txt = p['text']
                 if x < 210:
                     current_item['product_name'] = (current_item['product_name'] + ' ' + txt).strip()
-                elif 210 <= x < 290:
-                    current_item['sku'] = (current_item['sku'] + txt).strip()
-                elif 290 <= x < 360:
+                elif 210 <= x < 275:
+                    current_item['sku'] = (current_item['sku'] + ' ' + txt).strip()
+                elif 275 <= x < 355:
                     current_item['variant'] = (current_item['variant'] + ' ' + txt).strip()
-                elif x >= 360:
+                elif x >= 355:
                     try:
                         current_item['qty'] = int(txt)
                     except:
@@ -173,17 +175,19 @@ def parse_tiktok_page(page, page_num):
             order_no = order_match2.group(1)
 
     # Sender Name
+    raw_text = page.extract_text() or ""
+    raw_lower = (raw_text + " " + full_text).lower()
     sender = ""
-    sender_match = re.search(r'Pengirim\s*:\s*([A-Za-z0-9\s]+?)(?:\(\+62\)|JAWA|\d{9,})', full_text)
-    if sender_match:
-        sender = clean_text(sender_match.group(1))
-    if not sender or len(sender) < 3:
-        if "aruna" in full_text.lower():
-            sender = "Aruna Sportswear Indonesia"
-        elif "moveda" in full_text.lower():
-            sender = "Moveda Activewear Indonesia"
-        elif "bandana buff" in full_text.lower():
-            sender = "Bandana Buff Outdoor Indonesia"
+    if "bandana buff" in raw_lower:
+        sender = "Bandana Buff Outdoor Indonesia"
+    elif "moveda" in raw_lower:
+        sender = "Moveda Activewear Indonesia"
+    elif "aruna" in raw_lower:
+        sender = "Aruna Sportswear Indonesia"
+    else:
+        sender_match = re.search(r'Pengirim\s*:\s*([^\n|]+)', raw_text, re.IGNORECASE)
+        if sender_match:
+            sender = clean_text(sender_match.group(1))
 
     # Recipient Name
     recipient = ""

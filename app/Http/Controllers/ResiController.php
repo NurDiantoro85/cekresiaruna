@@ -145,10 +145,11 @@ class ResiController extends Controller
             $wbPlatform = $wb->platform ?: 'Shopee';
             
             foreach ($wb->items as $item) {
-                // Kolom ke-2 dari kanan: Shopee = Variasi, TikTok = Seller SKU
+                // Kolom ke-2 dari kanan: Shopee = Variasi, TikTok = Seller SKU (prioritaskan nama variasi bersih dari kamus)
+                $cleanVariant = (!empty($item->masterProduct?->variant) && $item->masterProduct->variant !== '-') ? $item->masterProduct->variant : null;
                 $code2ndFromRight = ($wbPlatform === 'Shopee')
-                    ? ($item->raw_variant ?: ($item->masterProduct?->variant ?: ($item->raw_sku ?: '-')))
-                    : ($item->raw_sku ?: ($item->masterProduct?->seller_sku ?: ($item->raw_variant ?: '-')));
+                    ? ($cleanVariant ?: ($item->raw_variant ?: ($item->raw_sku ?: '-')))
+                    : ($cleanVariant ?: ($item->raw_sku ?: ($item->masterProduct?->seller_sku ?: ($item->raw_variant ?: '-'))));
 
                 if ($item->is_mapped && $item->masterProduct) {
                     $mp = $item->masterProduct;
