@@ -7,7 +7,7 @@
     showResiModal: false,
     activeModalItem: null,
     activeModalStore: '',
-    showPdfModal: false,
+    modalView: 'list',
     pdfPage: 1,
     pdfWaybillNo: '',
     pdfTotalPages: {{ $batch->total_pages }},
@@ -16,17 +16,22 @@
     openResiModal(item, storeName) {
         this.activeModalItem = item;
         this.activeModalStore = storeName;
+        this.modalView = 'list';
         this.showResiModal = true;
     },
     openPdfPreview(page, waybillNo) {
         this.pdfPage = parseInt(page) || 1;
         this.pdfWaybillNo = waybillNo || '';
-        this.showPdfModal = true;
+        this.modalView = 'pdf';
+        this.showResiModal = true;
         this.$nextTick(() => {
             if (typeof renderPdfPage === 'function') {
                 renderPdfPage(this.pdfPage, this.pdfScale);
             }
         });
+    },
+    backToList() {
+        this.modalView = 'list';
     },
     prevPdfPage() {
         if (this.pdfPage > 1) {
@@ -442,173 +447,186 @@
         </div>
     </div>
 
-    <!-- Modal Detail Resi Terbaca -->
-    <div x-show="showResiModal" x-cloak class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div @click.away="showResiModal = false" class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 max-h-[90vh] flex flex-col">
-            <!-- Modal Header -->
-            <div class="bg-slate-900 text-white p-5 flex items-start justify-between">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xl">🔍</span>
-                        <h3 class="text-lg font-black text-white" x-text="activeModalItem?.variant_name"></h3>
-                    </div>
-                    <p class="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-2">
-                        <span>Toko: <strong class="text-white" x-text="activeModalStore"></strong></span>
-                        <span>&bull;</span>
-                        <span>Total Qty: <strong class="text-emerald-400" x-text="(activeModalItem?.total_qty || 0) + ' pcs'"></strong></span>
-                        <span>&bull;</span>
-                        <span>Ditemukan di: <strong class="text-blue-300" x-text="(activeModalItem?.waybill_items?.length || 0) + ' Resi / Halaman'"></strong></span>
-                    </p>
-                </div>
-                <button @click="showResiModal = false" class="text-slate-400 hover:text-white text-2xl font-bold leading-none p-1">&times;</button>
-            </div>
-
-            <!-- Modal Info Banner -->
-            <div class="bg-blue-50/70 px-5 py-3 border-b border-blue-100 text-xs text-blue-900 flex items-center justify-between">
-                <span>Daftar resi di file PDF yang membaca varian ini. Anda dapat memeriksa hasil teks yang terbaca dan membuka halaman PDF langsung:</span>
-            </div>
-
-            <!-- Modal Body (List of Waybills) -->
-            <div class="p-5 space-y-3 overflow-y-auto flex-1">
-                <template x-for="(wb, idx) in (activeModalItem?.waybill_items || [])" :key="idx">
-                    <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 hover:border-blue-300 transition space-y-2.5">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+    <!-- Unified Modal: Detail Resi Terbaca & Pratinjau PDF -->
+    <div x-show="showResiModal" x-cloak class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 z-50 overflow-y-auto">
+        <div @click.away="showResiModal = false" :class="modalView === 'pdf' ? 'max-w-4xl' : 'max-w-2xl'" class="bg-white rounded-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-4 max-h-[94vh] flex flex-col transition-all duration-200">
+            
+            <!-- ================= VIEW 1: DAFTAR RESI (LIST) ================= -->
+            <template x-if="modalView === 'list'">
+                <div class="flex flex-col h-full overflow-hidden">
+                    <!-- Modal Header -->
+                    <div class="bg-slate-900 text-white p-5 flex items-start justify-between">
+                        <div>
                             <div class="flex items-center gap-2">
-                                <span class="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black text-xs font-mono shadow-2xs">
-                                    Hal #<span x-text="wb.page_number"></span>
-                                </span>
-                                <div>
-                                    <div class="font-mono font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                                        <span x-text="wb.waybill_no"></span>
-                                        <button type="button" @click="copyText(wb.waybill_no)" class="text-[10px] text-slate-400 hover:text-slate-700 font-sans px-1 rounded bg-white border border-slate-200" title="Copy Resi">Copy</button>
+                                <span class="text-xl">🔍</span>
+                                <h3 class="text-lg font-black text-white" x-text="activeModalItem?.variant_name"></h3>
+                            </div>
+                            <p class="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-2">
+                                <span>Toko: <strong class="text-white" x-text="activeModalStore"></strong></span>
+                                <span>&bull;</span>
+                                <span>Total Qty: <strong class="text-emerald-400" x-text="(activeModalItem?.total_qty || 0) + ' pcs'"></strong></span>
+                                <span>&bull;</span>
+                                <span>Ditemukan di: <strong class="text-blue-300" x-text="(activeModalItem?.waybill_items?.length || 0) + ' Resi / Halaman'"></strong></span>
+                            </p>
+                        </div>
+                        <button type="button" @click="showResiModal = false" class="text-slate-400 hover:text-white text-2xl font-bold leading-none p-1 cursor-pointer">&times;</button>
+                    </div>
+
+                    <!-- Modal Info Banner -->
+                    <div class="bg-blue-50/70 px-5 py-3 border-b border-blue-100 text-xs text-blue-900 flex items-center justify-between">
+                        <span>Daftar resi di file PDF yang membaca varian ini. Anda dapat memeriksa hasil teks yang terbaca dan membuka halaman PDF langsung:</span>
+                    </div>
+
+                    <!-- Modal Body (List of Waybills) -->
+                    <div class="p-5 space-y-3 overflow-y-auto flex-1">
+                        <template x-for="(wb, idx) in (activeModalItem?.waybill_items || [])" :key="idx">
+                            <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 hover:border-blue-300 transition space-y-2.5">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black text-xs font-mono shadow-2xs">
+                                            Hal #<span x-text="wb.page_number"></span>
+                                        </span>
+                                        <div>
+                                            <div class="font-mono font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                                                <span x-text="wb.waybill_no"></span>
+                                                <button type="button" @click="copyText(wb.waybill_no)" class="text-[10px] text-slate-400 hover:text-slate-700 font-sans px-1 rounded bg-white border border-slate-200 cursor-pointer" title="Copy Resi">Copy</button>
+                                            </div>
+                                            <div class="text-[11px] text-slate-500" x-show="wb.order_no">
+                                                No. Pesanan: <span class="font-mono" x-text="wb.order_no"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="text-[11px] text-slate-500" x-show="wb.order_no">
-                                        No. Pesanan: <span class="font-mono" x-text="wb.order_no"></span>
+
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
+                                            Qty: <strong x-text="wb.qty + ' pcs'"></strong>
+                                        </span>
+                                        <button type="button" @click="openPdfPreview(wb.page_number, wb.waybill_no)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-2xs transition cursor-pointer">
+                                            <span>📄 Buka Hal #<span x-text="wb.page_number"></span></span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Teks Asli yang Terbaca dari Resi -->
+                                <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-1.5 text-xs">
+                                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                                        Bagian Resi yang Terbaca:
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                            <span class="text-[10px] text-slate-400 font-bold block">Kolom SKU di Resi:</span>
+                                            <span class="font-mono font-bold text-slate-800" x-text="wb.raw_sku || '-'"></span>
+                                        </div>
+                                        <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                            <span class="text-[10px] text-slate-400 font-bold block">Kolom Variasi di Resi:</span>
+                                            <span class="font-mono font-bold text-blue-700" x-text="wb.raw_variant || '-'"></span>
+                                        </div>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        <span class="text-[10px] text-slate-400 font-bold block">Nama Produk di Resi:</span>
+                                        <span class="text-slate-700 font-medium" x-text="wb.raw_product_name"></span>
                                     </div>
                                 </div>
                             </div>
+                        </template>
+                    </div>
 
-                            <div class="flex items-center gap-2">
-                                <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
-                                    Qty: <strong x-text="wb.qty + ' pcs'"></strong>
+                    <!-- Modal Footer -->
+                    <div class="bg-slate-50 p-4 border-t border-slate-200 flex justify-end">
+                        <button type="button" @click="showResiModal = false" class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition cursor-pointer">
+                            Tutup
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- ================= VIEW 2: PRATINJAU PDF (PDF VIEWER) ================= -->
+            <template x-if="modalView === 'pdf'">
+                <div class="flex flex-col h-full overflow-hidden">
+                    <!-- Modal Header -->
+                    <div class="bg-slate-900 text-white px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <button type="button" x-show="activeModalItem" @click="backToList()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white border border-slate-700 transition cursor-pointer shadow-2xs">
+                                <span>&larr;</span> <span>Kembali ke Daftar Resi</span>
+                            </button>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-bold text-sm text-white">Pratinjau Resi PDF</h3>
+                                    <span class="px-2 py-0.5 rounded-md text-[11px] font-black bg-blue-600 text-white font-mono">
+                                        Hal #<span x-text="pdfPage"></span> / <span x-text="pdfTotalPages"></span>
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-0.5" x-show="pdfWaybillNo">
+                                    No. Resi: <strong class="text-slate-200 font-mono" x-text="pdfWaybillNo"></strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Controls & Navigation -->
+                        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            <!-- Page Prev / Next -->
+                            <div class="inline-flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
+                                <button type="button" @click="prevPdfPage()" :disabled="pdfPage <= 1" class="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition cursor-pointer" title="Halaman Sebelumnya">
+                                    &larr; Prev
+                                </button>
+                                <span class="px-2 text-xs font-mono text-slate-300 border-x border-slate-700">
+                                    <span x-text="pdfPage"></span> / <span x-text="pdfTotalPages"></span>
                                 </span>
-                                <button type="button" @click="openPdfPreview(wb.page_number, wb.waybill_no)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-2xs transition cursor-pointer">
-                                    <span>📄 Buka Hal #<span x-text="wb.page_number"></span></span>
+                                <button type="button" @click="nextPdfPage()" :disabled="pdfPage >= pdfTotalPages" class="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition cursor-pointer" title="Halaman Berikutnya">
+                                    Next &rarr;
                                 </button>
                             </div>
-                        </div>
 
-                        <!-- Teks Asli yang Terbaca dari Resi -->
-                        <div class="bg-white p-3 rounded-xl border border-slate-200 space-y-1.5 text-xs">
-                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                                Bagian Resi yang Terbaca:
+                            <!-- Zoom Controls -->
+                            <div class="inline-flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700 text-xs">
+                                <button type="button" @click="zoomOut()" class="px-2 py-1 text-slate-300 hover:bg-slate-700 rounded-lg transition cursor-pointer" title="Perkecil (-)">
+                                    🔍-
+                                </button>
+                                <span class="px-1 text-[11px] font-mono text-slate-400" x-text="Math.round(pdfScale * 100) + '%'"></span>
+                                <button type="button" @click="zoomIn()" class="px-2 py-1 text-slate-300 hover:bg-slate-700 rounded-lg transition cursor-pointer" title="Perbesar (+)">
+                                    🔍+
+                                </button>
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                    <span class="text-[10px] text-slate-400 font-bold block">Kolom SKU di Resi:</span>
-                                    <span class="font-mono font-bold text-slate-800" x-text="wb.raw_sku || '-'"></span>
-                                </div>
-                                <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                    <span class="text-[10px] text-slate-400 font-bold block">Kolom Variasi di Resi:</span>
-                                    <span class="font-mono font-bold text-blue-700" x-text="wb.raw_variant || '-'"></span>
-                                </div>
-                            </div>
-                            <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                <span class="text-[10px] text-slate-400 font-bold block">Nama Produk di Resi:</span>
-                                <span class="text-slate-700 font-medium" x-text="wb.raw_product_name"></span>
-                            </div>
+
+                            <!-- Close -->
+                            <button type="button" @click="showResiModal = false" class="p-1.5 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-lg leading-none cursor-pointer" title="Tutup Modal">
+                                &times;
+                            </button>
                         </div>
                     </div>
-                </template>
-            </div>
 
-            <!-- Modal Footer -->
-            <div class="bg-slate-50 p-4 border-t border-slate-200 flex justify-end">
-                <button @click="showResiModal = false" class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs transition">
-                    Tutup
-                </button>
-            </div>
-        </div>
-    </div>
+                    <!-- Modal Body: Canvas Area -->
+                    <div class="relative flex-1 bg-slate-900/95 overflow-auto p-4 sm:p-6 flex items-center justify-center min-h-[480px]">
+                        <!-- Loading Indicator -->
+                        <div id="pdf-loading-indicator" class="absolute inset-0 bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-3 z-10" style="display: none;">
+                            <div class="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span class="text-xs font-bold text-slate-300">Merender halaman resi...</span>
+                        </div>
 
-    <!-- Modal Pratinjau Resi PDF (Inline In-App Viewer - Tanpa Download) -->
-    <div x-show="showPdfModal" x-cloak class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-60 overflow-y-auto">
-        <div @click.away="showPdfModal = false" class="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-700/40 overflow-hidden my-4 max-h-[96vh] flex flex-col">
-            <!-- Modal Header -->
-            <div class="bg-slate-900 text-white px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800">
-                <div class="flex items-center gap-3">
-                    <span class="p-2 bg-blue-600/30 rounded-xl border border-blue-500/40 text-blue-400 text-lg">📄</span>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h3 class="font-bold text-sm text-white">Pratinjau Resi PDF</h3>
-                            <span class="px-2 py-0.5 rounded-md text-[11px] font-black bg-blue-600 text-white font-mono">
-                                Halaman #<span x-text="pdfPage"></span> / <span x-text="pdfTotalPages"></span>
+                        <!-- Canvas Wrapper -->
+                        <div class="shadow-2xl rounded-xl overflow-hidden bg-white border border-slate-300/30">
+                            <canvas id="pdf-canvas" class="block max-w-full h-auto"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="bg-slate-900 px-5 py-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400">
+                        <div>
+                            <button type="button" x-show="activeModalItem" @click="backToList()" class="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-bold transition cursor-pointer">
+                                <span>&larr; Kembali ke Rincian Resi</span>
+                            </button>
+                            <span x-show="!activeModalItem" class="text-slate-400">
+                                💡 Tips: Gunakan tombol <strong>Prev</strong> / <strong>Next</strong> atau tombol Zoom untuk memeriksa label resi.
                             </span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-0.5" x-show="pdfWaybillNo">
-                            No. Resi: <strong class="text-slate-200 font-mono" x-text="pdfWaybillNo"></strong>
-                        </p>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="showResiModal = false" class="px-5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition cursor-pointer">
+                                Tutup
+                            </button>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Controls & Navigation -->
-                <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    <!-- Page Prev / Next -->
-                    <div class="inline-flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
-                        <button type="button" @click="prevPdfPage()" :disabled="pdfPage <= 1" class="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition cursor-pointer" title="Halaman Sebelumnya">
-                            &larr; Prev
-                        </button>
-                        <span class="px-2 text-xs font-mono text-slate-300 border-x border-slate-700">
-                            <span x-text="pdfPage"></span> / <span x-text="pdfTotalPages"></span>
-                        </span>
-                        <button type="button" @click="nextPdfPage()" :disabled="pdfPage >= pdfTotalPages" class="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition cursor-pointer" title="Halaman Berikutnya">
-                            Next &rarr;
-                        </button>
-                    </div>
-
-                    <!-- Zoom Controls -->
-                    <div class="inline-flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700 text-xs">
-                        <button type="button" @click="zoomOut()" class="px-2 py-1 text-slate-300 hover:bg-slate-700 rounded-lg transition cursor-pointer" title="Perkecil (-)">
-                            🔍-
-                        </button>
-                        <span class="px-1 text-[11px] font-mono text-slate-400" x-text="Math.round(pdfScale * 100) + '%'"></span>
-                        <button type="button" @click="zoomIn()" class="px-2 py-1 text-slate-300 hover:bg-slate-700 rounded-lg transition cursor-pointer" title="Perbesar (+)">
-                            🔍+
-                        </button>
-                    </div>
-
-                    <!-- Close -->
-                    <button type="button" @click="showPdfModal = false" class="p-1.5 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-lg leading-none cursor-pointer" title="Tutup Pratinjau">
-                        &times;
-                    </button>
-                </div>
-            </div>
-
-            <!-- Modal Body: Canvas Area -->
-            <div class="relative flex-1 bg-slate-900/95 overflow-auto p-4 sm:p-6 flex items-center justify-center min-h-[480px]">
-                <!-- Loading Indicator -->
-                <div id="pdf-loading-indicator" class="absolute inset-0 bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-3 z-10" style="display: none;">
-                    <div class="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-xs font-bold text-slate-300">Merender halaman resi...</span>
-                </div>
-
-                <!-- Canvas Wrapper -->
-                <div class="shadow-2xl rounded-xl overflow-hidden bg-white border border-slate-300/30">
-                    <canvas id="pdf-canvas" class="block max-w-full h-auto"></canvas>
-                </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="bg-slate-900 px-5 py-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400">
-                <div>
-                    💡 Tips: Gunakan tombol <strong>Prev</strong> / <strong>Next</strong> atau tombol Zoom untuk memeriksa label resi secara detail.
-                </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" @click="showPdfModal = false" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition cursor-pointer">
-                        Tutup
-                    </button>
-                </div>
-            </div>
+            </template>
         </div>
     </div>
 </div>
@@ -637,9 +655,13 @@
     }
 
     async function renderPdfPage(pageNum, scale = 1.2) {
-        const canvas = document.getElementById('pdf-canvas');
-        const loadingEl = document.getElementById('pdf-loading-indicator');
+        let canvas = document.getElementById('pdf-canvas');
+        if (!canvas) {
+            await new Promise(r => setTimeout(r, 60));
+            canvas = document.getElementById('pdf-canvas');
+        }
         if (!canvas) return;
+        const loadingEl = document.getElementById('pdf-loading-indicator');
 
         if (loadingEl) loadingEl.style.display = 'flex';
 
