@@ -312,7 +312,8 @@ class ResiController extends Controller
 
         return response()->file($path, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $batch->file_name . '"',
+            'Content-Disposition' => 'inline',
+            'Accept-Ranges' => 'bytes',
         ]);
     }
 

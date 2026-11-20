@@ -7,10 +7,58 @@
     showResiModal: false,
     activeModalItem: null,
     activeModalStore: '',
+    showPdfModal: false,
+    pdfPage: 1,
+    pdfWaybillNo: '',
+    pdfTotalPages: {{ $batch->total_pages }},
+    pdfLoading: false,
+    pdfScale: 1.2,
     openResiModal(item, storeName) {
         this.activeModalItem = item;
         this.activeModalStore = storeName;
         this.showResiModal = true;
+    },
+    openPdfPreview(page, waybillNo) {
+        this.pdfPage = parseInt(page) || 1;
+        this.pdfWaybillNo = waybillNo || '';
+        this.showPdfModal = true;
+        this.$nextTick(() => {
+            if (typeof renderPdfPage === 'function') {
+                renderPdfPage(this.pdfPage, this.pdfScale);
+            }
+        });
+    },
+    prevPdfPage() {
+        if (this.pdfPage > 1) {
+            this.pdfPage--;
+            if (typeof renderPdfPage === 'function') {
+                renderPdfPage(this.pdfPage, this.pdfScale);
+            }
+        }
+    },
+    nextPdfPage() {
+        if (this.pdfPage < this.pdfTotalPages) {
+            this.pdfPage++;
+            if (typeof renderPdfPage === 'function') {
+                renderPdfPage(this.pdfPage, this.pdfScale);
+            }
+        }
+    },
+    zoomIn() {
+        if (this.pdfScale < 2.5) {
+            this.pdfScale = +(this.pdfScale + 0.25).toFixed(2);
+            if (typeof renderPdfPage === 'function') {
+                renderPdfPage(this.pdfPage, this.pdfScale);
+            }
+        }
+    },
+    zoomOut() {
+        if (this.pdfScale > 0.6) {
+            this.pdfScale = +(this.pdfScale - 0.25).toFixed(2);
+            if (typeof renderPdfPage === 'function') {
+                renderPdfPage(this.pdfPage, this.pdfScale);
+            }
+        }
     }
 }" class="space-y-6">
     <!-- Breadcrumb & Top Actions -->
@@ -352,7 +400,12 @@
                     <tbody class="divide-y divide-slate-200 font-medium bg-white text-slate-900">
                         @foreach($batch->waybills as $wb)
                             <tr class="hover:bg-slate-50/80 transition border-b border-slate-200 waybill-row text-slate-900">
-                                <td class="py-3 px-3.5 border-r border-slate-200 text-slate-900 font-bold text-center">#{{ $wb->page_number }}</td>
+                                <td class="py-3 px-3.5 border-r border-slate-200 text-slate-900 font-bold text-center">
+                                    <button type="button" @click="openPdfPreview({{ $wb->page_number }}, '{{ $wb->waybill_no }}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-mono font-bold text-xs text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white transition shadow-2xs cursor-pointer" title="Pratinjau Halaman Resi">
+                                        <span>#{{ $wb->page_number }}</span>
+                                        <span class="text-[10px]">📄</span>
+                                    </button>
+                                </td>
                                 <td class="py-3 px-3.5 border-r border-slate-200 font-mono font-bold text-slate-900 text-center">
                                     {{ $wb->waybill_no }}
                                 </td>
@@ -439,9 +492,9 @@
                                 <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
                                     Qty: <strong x-text="wb.qty + ' pcs'"></strong>
                                 </span>
-                                <a :href="'/batch/' + batchId + '/pdf#page=' + wb.page_number" target="_blank" class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold text-blue-700 bg-white border border-blue-300 hover:bg-blue-50 shadow-2xs transition">
-                                    📄 Buka Hal #<span x-text="wb.page_number"></span>
-                                </a>
+                                <button type="button" @click="openPdfPreview(wb.page_number, wb.waybill_no)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-2xs transition cursor-pointer">
+                                    <span>📄 Buka Hal #<span x-text="wb.page_number"></span></span>
+                                </button>
                             </div>
                         </div>
 
@@ -477,12 +530,157 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Pratinjau Resi PDF (Inline In-App Viewer - Tanpa Download) -->
+    <div x-show="showPdfModal" x-cloak class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-60 overflow-y-auto">
+        <div @click.away="showPdfModal = false" class="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-700/40 overflow-hidden my-4 max-h-[96vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <span class="p-2 bg-blue-600/30 rounded-xl border border-blue-500/40 text-blue-400 text-lg">📄</span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-sm text-white">Pratinjau Resi PDF</h3>
+                            <span class="px-2 py-0.5 rounded-md text-[11px] font-black bg-blue-600 text-white font-mono">
+                                Halaman #<span x-text="pdfPage"></span> / <span x-text="pdfTotalPages"></span>
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5" x-show="pdfWaybillNo">
+                            No. Resi: <strong class="text-slate-200 font-mono" x-text="pdfWaybillNo"></strong>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Controls & Navigation -->
+                <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <!-- Page Prev / Next -->
+                    <div class="inline-flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
+                        <button type="button" @click="prevPdfPage()" :disabled="pdfPage <= 1" class="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition cursor-pointer" title="Halaman Sebelumnya">
+                            &larr; Prev
+                        </button>
+                        <span class="px-2 text-xs font-mono text-slate-300 border-x border-slate-700">
+                            <span x-text="pdfPage"></span> / <span x-text="pdfTotalPages"></span>
+                        </span>
+                        <button type="button" @click="nextPdfPage()" :disabled="pdfPage >= pdfTotalPages" class="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent rounded-lg transition cursor-pointer" title="Halaman Berikutnya">
+                            Next &rarr;
+                        </button>
+                    </div>
+
+                    <!-- Zoom Controls -->
+                    <div class="inline-flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700 text-xs">
+                        <button type="button" @click="zoomOut()" class="px-2 py-1 text-slate-300 hover:bg-slate-700 rounded-lg transition cursor-pointer" title="Perkecil (-)">
+                            🔍-
+                        </button>
+                        <span class="px-1 text-[11px] font-mono text-slate-400" x-text="Math.round(pdfScale * 100) + '%'"></span>
+                        <button type="button" @click="zoomIn()" class="px-2 py-1 text-slate-300 hover:bg-slate-700 rounded-lg transition cursor-pointer" title="Perbesar (+)">
+                            🔍+
+                        </button>
+                    </div>
+
+                    <!-- Close -->
+                    <button type="button" @click="showPdfModal = false" class="p-1.5 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-lg leading-none cursor-pointer" title="Tutup Pratinjau">
+                        &times;
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body: Canvas Area -->
+            <div class="relative flex-1 bg-slate-900/95 overflow-auto p-4 sm:p-6 flex items-center justify-center min-h-[480px]">
+                <!-- Loading Indicator -->
+                <div id="pdf-loading-indicator" class="absolute inset-0 bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-3 z-10" style="display: none;">
+                    <div class="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-xs font-bold text-slate-300">Merender halaman resi...</span>
+                </div>
+
+                <!-- Canvas Wrapper -->
+                <div class="shadow-2xl rounded-xl overflow-hidden bg-white border border-slate-300/30">
+                    <canvas id="pdf-canvas" class="block max-w-full h-auto"></canvas>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-900 px-5 py-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400">
+                <div>
+                    💡 Tips: Gunakan tombol <strong>Prev</strong> / <strong>Next</strong> atau tombol Zoom untuk memeriksa label resi secara detail.
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="showPdfModal = false" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition cursor-pointer">
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('scripts')
+<script src="{{ asset('vendor/pdfjs/pdf.min.js') }}"></script>
 <script>
     const batchId = "{{ $batch->id }}";
     const storageKey = 'stodo_checked_' + batchId;
+    const pdfUrl = "{{ route('resi.pdf', $batch->id) }}";
+
+    // Configure PDF.js worker
+    if (window.pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "{{ asset('vendor/pdfjs/pdf.worker.min.js') }}";
+    }
+
+    let pdfDocInstance = null;
+    let currentRenderTask = null;
+
+    async function getPdfDocument() {
+        if (!pdfDocInstance) {
+            const loadingTask = pdfjsLib.getDocument(pdfUrl);
+            pdfDocInstance = await loadingTask.promise;
+        }
+        return pdfDocInstance;
+    }
+
+    async function renderPdfPage(pageNum, scale = 1.2) {
+        const canvas = document.getElementById('pdf-canvas');
+        const loadingEl = document.getElementById('pdf-loading-indicator');
+        if (!canvas) return;
+
+        if (loadingEl) loadingEl.style.display = 'flex';
+
+        if (currentRenderTask) {
+            try {
+                currentRenderTask.cancel();
+            } catch (err) {}
+            currentRenderTask = null;
+        }
+
+        try {
+            const doc = await getPdfDocument();
+            const page = await doc.getPage(pageNum);
+            const ctx = canvas.getContext('2d');
+
+            const pixelRatio = window.devicePixelRatio || 1;
+            const viewport = page.getViewport({ scale: scale });
+
+            canvas.width = Math.floor(viewport.width * pixelRatio);
+            canvas.height = Math.floor(viewport.height * pixelRatio);
+            canvas.style.width = Math.floor(viewport.width) + 'px';
+            canvas.style.height = Math.floor(viewport.height) + 'px';
+
+            ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport
+            };
+
+            currentRenderTask = page.render(renderContext);
+            await currentRenderTask.promise;
+            currentRenderTask = null;
+        } catch (err) {
+            if (err && err.name !== 'RenderingCancelledException') {
+                console.error('Gagal merender halaman PDF:', err);
+            }
+        } finally {
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    }
 
     // Tab Switching
     function switchTab(tab) {
