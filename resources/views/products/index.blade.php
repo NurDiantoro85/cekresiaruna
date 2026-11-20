@@ -42,22 +42,26 @@
         </div>
     </div>
 
+    @php
+        $activeTab = request('tab', 'list');
+    @endphp
+
     <!-- Main Card with Navigation Tabs -->
     <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         <!-- Tabs Header -->
         <div class="border-b border-slate-200 bg-slate-50/70 px-6 pt-4 flex space-x-4">
-            <button onclick="switchProductTab('list')" id="ptab-btn-list" class="ptab-btn pb-3.5 px-3 text-sm font-bold border-b-2 border-blue-600 text-blue-700 flex items-center space-x-2">
+            <button onclick="switchProductTab('list')" id="ptab-btn-list" class="ptab-btn pb-3.5 px-3 text-sm {{ $activeTab === 'list' ? 'border-b-2 border-blue-600 text-blue-700 font-bold' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-semibold' }} flex items-center space-x-2">
                 <span>📦 Daftar Master Produk</span>
                 <span class="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">{{ $products->total() }}</span>
             </button>
-            <button onclick="switchProductTab('filters')" id="ptab-btn-filters" class="ptab-btn pb-3.5 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2">
+            <button onclick="switchProductTab('filters')" id="ptab-btn-filters" class="ptab-btn pb-3.5 px-3 text-sm {{ $activeTab === 'filters' ? 'border-b-2 border-blue-600 text-blue-700 font-bold' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-semibold' }} flex items-center space-x-2">
                 <span>⚙️ Kamus Variasi / Seller SKU</span>
                 <span class="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-800">{{ $variants->count() }}</span>
             </button>
         </div>
 
         <!-- TAB 1: DAFTAR MASTER PRODUK (Referensi Desain Gambar 4) -->
-        <div id="ptab-content-list" class="p-6 space-y-4">
+        <div id="ptab-content-list" class="p-6 space-y-4 {{ $activeTab === 'list' ? '' : 'hidden' }}">
             <div class="overflow-x-auto rounded-xl border border-slate-200">
                 <table class="w-full text-left text-xs text-slate-700 border-collapse">
                     <thead class="bg-[#495098] text-white text-[11px] font-bold uppercase tracking-wider">
@@ -129,7 +133,7 @@
         </div>
 
         <!-- TAB 2: KAMUS VARIASI / SELLER SKU -->
-        <div id="ptab-content-filters" class="p-6 hidden space-y-6" x-data="{
+        <div id="ptab-content-filters" class="p-6 space-y-6 {{ $activeTab === 'filters' ? '' : 'hidden' }}" x-data="{
             selectMode: false,
             selected: [],
             allIds: {{ json_encode($variants->pluck('id')) }},
@@ -424,17 +428,53 @@
 
     function switchProductTab(tab) {
         document.querySelectorAll('.ptab-btn').forEach(btn => {
-            btn.classList.remove('border-blue-600', 'text-blue-700');
-            btn.classList.add('border-transparent', 'text-slate-500');
+            btn.classList.remove('border-blue-600', 'text-blue-700', 'font-bold');
+            btn.classList.add('border-transparent', 'text-slate-500', 'font-semibold');
         });
-        document.getElementById('ptab-btn-' + tab).classList.add('border-blue-600', 'text-blue-700');
-        document.getElementById('ptab-btn-' + tab).classList.remove('border-transparent', 'text-slate-500');
+        const activeBtn = document.getElementById('ptab-btn-' + tab);
+        if (activeBtn) {
+            activeBtn.classList.add('border-blue-600', 'text-blue-700', 'font-bold');
+            activeBtn.classList.remove('border-transparent', 'text-slate-500', 'font-semibold');
+        }
 
-        document.getElementById('ptab-content-list').classList.add('hidden');
-        document.getElementById('ptab-content-filters').classList.add('hidden');
+        const contentList = document.getElementById('ptab-content-list');
+        const contentFilters = document.getElementById('ptab-content-filters');
+        if (contentList) contentList.classList.add('hidden');
+        if (contentFilters) contentFilters.classList.add('hidden');
 
-        document.getElementById('ptab-content-' + tab).classList.remove('hidden');
+        const activeContent = document.getElementById('ptab-content-' + tab);
+        if (activeContent) {
+            activeContent.classList.remove('hidden');
+        }
+
+        try {
+            localStorage.setItem('active_product_tab', tab);
+        } catch (e) {}
+
+        if (window.history && window.history.replaceState) {
+            const url = new URL(window.location);
+            url.searchParams.set('tab', tab);
+            window.history.replaceState({}, '', url);
+        }
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab');
+        const hash = window.location.hash;
+        let storedTab = null;
+        try {
+            storedTab = localStorage.getItem('active_product_tab');
+        } catch (e) {}
+
+        if (tabParam === 'filters' || hash === '#kamus-variasi' || hash === '#filters') {
+            switchProductTab('filters');
+        } else if (tabParam === 'list' || hash === '#list') {
+            switchProductTab('list');
+        } else if (storedTab === 'filters') {
+            switchProductTab('filters');
+        }
+    });
 </script>
 @endpush
 @endsection

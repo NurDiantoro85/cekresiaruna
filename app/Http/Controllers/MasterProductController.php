@@ -115,13 +115,13 @@ class MasterProductController extends Controller
     {
         $request->validate(['name' => 'required|string|unique:master_variants,name|max:100']);
         MasterVariant::create(['name' => trim($request->name)]);
-        return back()->with('success', 'Variasi / Seller SKU berhasil ditambahkan!');
+        return redirect()->route('products.index', ['tab' => 'filters'])->with('success', 'Variasi / Seller SKU berhasil ditambahkan!');
     }
 
     public function destroyVariant(MasterVariant $variant)
     {
         $variant->delete();
-        return back()->with('success', 'Variasi / Seller SKU dihapus.');
+        return redirect()->route('products.index', ['tab' => 'filters'])->with('success', 'Variasi / Seller SKU dihapus.');
     }
 
     public function bulkDestroyVariants(Request $request)
@@ -129,7 +129,7 @@ class MasterProductController extends Controller
         if ($request->boolean('delete_all')) {
             $count = MasterVariant::count();
             MasterVariant::query()->delete();
-            return back()->with('success', "Seluruh ({$count}) Variasi & Seller SKU berhasil dihapus.");
+            return redirect()->route('products.index', ['tab' => 'filters'])->with('success', "Seluruh ({$count}) Variasi & Seller SKU berhasil dihapus.");
         }
 
         $validated = $request->validate([
@@ -138,7 +138,7 @@ class MasterProductController extends Controller
         ]);
 
         $count = MasterVariant::whereIn('id', $validated['ids'])->delete();
-        return back()->with('success', "{$count} Variasi / Seller SKU berhasil dihapus.");
+        return redirect()->route('products.index', ['tab' => 'filters'])->with('success', "{$count} Variasi / Seller SKU berhasil dihapus.");
     }
 
     // Product Mapping Methods
@@ -200,6 +200,6 @@ class MasterProductController extends Controller
         }
         fclose($handle);
 
-        return back()->with('success', "Berhasil mengimpor {$imported} Variasi / Seller SKU baru dari file CSV! ({$skipped} sudah ada di kamus).");
+        return redirect()->route('products.index', ['tab' => 'filters'])->with('success', "Berhasil mengimpor {$imported} Variasi / Seller SKU baru dari file CSV! ({$skipped} sudah ada di kamus).");
     }
 }
