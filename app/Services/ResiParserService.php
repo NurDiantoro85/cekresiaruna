@@ -21,10 +21,10 @@ class ResiParserService
         $pythonScript = base_path('app/Services/Parser/merge_pdfs.py'); // Note: parser is parse_waybills.py
         $pythonScript = base_path('app/Services/Parser/parse_waybills.py');
 
-        // Gunakan Python 3.15 terpasang secara eksplisit jika ada
-        $python = 'python';
+        // Gunakan Python dari env atau PATH sistem, atau path default lokal
+        $python = env('PYTHON_PATH', 'python');
         $knownPython = 'C:\\Users\\ACER\\AppData\\Local\\Programs\\Python\\Python315\\python.exe';
-        if (file_exists($knownPython)) {
+        if ($python === 'python' && file_exists($knownPython)) {
             $python = $knownPython;
         }
 

@@ -83,9 +83,9 @@ class PdfMergeController extends Controller
 
         // Python script
         $pythonScript = base_path('app/Services/Parser/merge_pdfs.py');
-        $python = 'python';
+        $python = env('PYTHON_PATH', 'python');
         $knownPython = 'C:\\Users\\ACER\\AppData\\Local\\Programs\\Python\\Python315\\python.exe';
-        if (file_exists($knownPython)) {
+        if ($python === 'python' && file_exists($knownPython)) {
             $python = $knownPython;
         }
 
