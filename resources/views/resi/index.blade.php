@@ -271,7 +271,8 @@
                                     @endif
                                 </td>
                                 <td class="py-3 px-3.5 border-r border-slate-200 text-xs text-slate-900 font-medium text-center">
-                                    {{ $b->created_at->format('d M Y, H:i') }}
+                                    <div class="font-bold text-slate-800">{{ $b->created_at->timezone('Asia/Jakarta')->format('d M Y, H:i') }} WIB</div>
+                                    <div class="text-[10px] text-slate-400 mt-0.5">{{ $b->created_at->timezone('Asia/Jakarta')->diffForHumans() }}</div>
                                 </td>
                                 <td class="py-3 px-3.5 text-center whitespace-nowrap">
                                     <div class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">

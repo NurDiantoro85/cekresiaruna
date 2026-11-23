@@ -63,9 +63,7 @@ def parse_shopee_page(page, page_num):
     raw_text = page.extract_text() or ""
     raw_lower = (raw_text + " " + full_text).lower()
     sender = ""
-    if "bandana buff" in raw_lower:
-        sender = "Bandana Buff Outdoor Indonesia"
-    elif "moveda" in raw_lower:
+    if "moveda" in raw_lower or "bandana buff" in raw_lower:
         sender = "Moveda Activewear Indonesia"
     elif "aruna" in raw_lower:
         sender = "Aruna Sportswear Indonesia"
@@ -178,9 +176,7 @@ def parse_tiktok_page(page, page_num):
     raw_text = page.extract_text() or ""
     raw_lower = (raw_text + " " + full_text).lower()
     sender = ""
-    if "bandana buff" in raw_lower:
-        sender = "Bandana Buff Outdoor Indonesia"
-    elif "moveda" in raw_lower:
+    if "moveda" in raw_lower or "bandana buff" in raw_lower:
         sender = "Moveda Activewear Indonesia"
     elif "aruna" in raw_lower:
         sender = "Aruna Sportswear Indonesia"

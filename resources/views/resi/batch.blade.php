@@ -97,7 +97,7 @@
                 <span>&bull;</span>
                 <span>File: <strong class="text-slate-800">{{ $batch->file_name }}</strong></span>
                 <span>&bull;</span>
-                <span>Diproses pada: {{ $batch->created_at->format('d M Y, H:i') }}</span>
+                <span>Diproses pada: <strong class="text-slate-800">{{ $batch->created_at->timezone('Asia/Jakarta')->format('d M Y, H:i') }} WIB</strong> ({{ $batch->created_at->timezone('Asia/Jakarta')->diffForHumans() }})</span>
             </div>
         </div>
 
@@ -131,6 +131,51 @@
             <div class="text-2xl font-extrabold text-indigo-600 mt-1">{{ count($mappedSummary) + count($unmappedSummary) }} <span class="text-xs font-normal text-slate-400">jenis</span></div>
         </div>
     </div>
+
+    <!-- Alert for Detected Typos / Suspected Spelling Mismatch -->
+    @if(isset($detectedTypos) && count($detectedTypos) > 0)
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-start space-x-3">
+                    <span class="text-2xl flex-shrink-0">🔔</span>
+                    <div>
+                        <h3 class="text-sm font-black text-amber-900 flex items-center gap-2">
+                            <span>Notifikasi Pemeriksaan: Ditemukan {{ count($detectedTypos) }} Potensi Salah Ketik (Typo) di Label Resi!</span>
+                            <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-900">
+                                Perlu Dicek
+                            </span>
+                        </h3>
+                        <p class="text-xs text-amber-800 mt-1">
+                            Sistem mendeteksi ada teks variasi/SKU pada resi yang memiliki kemiripan tinggi dengan kamus variasi Anda, namun kemungkinan ada salah ketik (typo). Harap periksa saran di bawah:
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                @foreach($detectedTypos as $typo)
+                    <div class="bg-white p-3.5 rounded-xl border border-amber-200 text-xs shadow-2xs space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-red-700 font-mono font-bold text-[11px] bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                                Resi: "{{ $typo['raw_text'] }}"
+                            </span>
+                            <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                                Kemiripan {{ $typo['similarity'] }}%
+                            </span>
+                        </div>
+                        <div class="text-emerald-800 font-bold flex items-center gap-1">
+                            <span>➔ Maksudnya:</span>
+                            <span class="underline underline-offset-2">{{ $typo['suggested_variant'] }}</span>?
+                        </div>
+                        <div class="text-[11px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
+                            <span>Hal #{{ $typo['page_number'] }} ({{ $typo['waybill_no'] }})</span>
+                            <span class="font-bold text-slate-700">{{ $typo['count'] }} pcs</span>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
 
     <!-- Alert for Unmapped Items if any (Dropdown Accordion) -->
     @if(count($unmappedSummary) > 0)
@@ -603,8 +648,20 @@
                             <span class="text-xs font-bold text-slate-300">Merender halaman resi...</span>
                         </div>
 
+                        <!-- Error Indicator -->
+                        <div id="pdf-error-indicator" class="flex-col items-center justify-center text-center p-8 bg-slate-800/90 rounded-2xl border border-red-500/40 text-white max-w-md gap-3 z-10" style="display: none;">
+                            <span class="text-4xl">⚠️</span>
+                            <div class="font-bold text-base text-red-300">File PDF Resi Tidak Ditemukan</div>
+                            <p class="text-xs text-slate-300 mt-1" id="pdf-error-message">Berkas PDF tidak ditemukan di server atau browser membatasi pembacaan berkas.</p>
+                            <div class="mt-4 flex items-center justify-center gap-2">
+                                <a :href="'/batch/' + batchId + '/pdf'" target="_blank" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition shadow-sm">
+                                    Cek Unduh Langsung ↗
+                                </a>
+                            </div>
+                        </div>
+
                         <!-- Canvas Wrapper -->
-                        <div class="shadow-2xl rounded-xl overflow-hidden bg-white border border-slate-300/30">
+                        <div id="pdf-canvas-wrapper" class="shadow-2xl rounded-xl overflow-hidden bg-white border border-slate-300/30" style="display: none;">
                             <canvas id="pdf-canvas" class="block max-w-full h-auto"></canvas>
                         </div>
                     </div>
@@ -663,6 +720,11 @@
         if (!canvas) return;
         const loadingEl = document.getElementById('pdf-loading-indicator');
 
+        const wrapper = document.getElementById('pdf-canvas-wrapper');
+        const errorEl = document.getElementById('pdf-error-indicator');
+        const errorMsgEl = document.getElementById('pdf-error-message');
+
+        if (errorEl) errorEl.style.display = 'none';
         if (loadingEl) loadingEl.style.display = 'flex';
 
         if (currentRenderTask) {
@@ -695,9 +757,18 @@
             currentRenderTask = page.render(renderContext);
             await currentRenderTask.promise;
             currentRenderTask = null;
+
+            if (wrapper) wrapper.style.display = 'block';
         } catch (err) {
             if (err && err.name !== 'RenderingCancelledException') {
                 console.error('Gagal merender halaman PDF:', err);
+                if (wrapper) wrapper.style.display = 'none';
+                if (errorEl) {
+                    errorEl.style.display = 'flex';
+                    if (errorMsgEl && err.message) {
+                        errorMsgEl.textContent = 'File PDF tidak dapat dimuat: ' + err.message;
+                    }
+                }
             }
         } finally {
             if (loadingEl) loadingEl.style.display = 'none';

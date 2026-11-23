@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MasterProduct;
+use App\Models\MasterVariant;
 use App\Models\ProductMapping;
 use App\Models\Store;
 use App\Models\UploadBatch;
@@ -282,10 +283,53 @@ class ResiController extends Controller
 
         $allMasterProducts = MasterProduct::orderBy('name')->get();
 
+        // Deteksi potensi typo atau salah ketik pada label resi terhadap Kamus Master Variasi
+        $detectedTypos = [];
+        $masterVariants = MasterVariant::pluck('name')->all();
+
+        foreach ($batch->waybills as $wb) {
+            foreach ($wb->items as $it) {
+                if (!$it->is_mapped) {
+                    $acuan = ($wb->platform === 'Shopee') ? ($it->raw_variant ?: $it->raw_sku) : ($it->raw_sku ?: $it->raw_variant);
+                    $cleanAcuan = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($acuan));
+
+                    if (strlen($cleanAcuan) >= 3) {
+                        $bestMatch = null;
+                        $bestScore = 0;
+                        foreach ($masterVariants as $mv) {
+                            $cleanMv = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($mv));
+                            similar_text($cleanAcuan, $cleanMv, $pct);
+                            if ($pct > $bestScore) {
+                                $bestScore = $pct;
+                                $bestMatch = $mv;
+                            }
+                        }
+
+                        if ($bestScore >= 65 && $bestScore < 100 && $bestMatch) {
+                            $key = $acuan . '_' . $bestMatch;
+                            if (!isset($detectedTypos[$key])) {
+                                $detectedTypos[$key] = [
+                                    'raw_text' => $acuan,
+                                    'suggested_variant' => $bestMatch,
+                                    'similarity' => round($bestScore),
+                                    'count' => 0,
+                                    'waybill_no' => $wb->waybill_no,
+                                    'page_number' => $wb->page_number,
+                                    'platform' => $wb->platform,
+                                ];
+                            }
+                            $detectedTypos[$key]['count'] += $it->qty;
+                        }
+                    }
+                }
+            }
+        }
+
         return view('resi.batch', compact(
             'batch',
             'mappedSummary',
             'unmappedSummary',
+            'detectedTypos',
             'storeGroups',
             'storeBreakdown',
             'allMasterProducts',
@@ -301,13 +345,24 @@ class ResiController extends Controller
      */
     public function viewPdf(UploadBatch $batch)
     {
-        $path = storage_path('app/batches_pdf/' . $batch->batch_code . '.pdf');
-        if (!file_exists($path)) {
-            if (file_exists('d:/Test.pdf')) {
-                $path = 'd:/Test.pdf';
-            } else {
-                abort(404, 'File PDF tidak ditemukan di server.');
+        $candidates = [
+            storage_path('app/batches_pdf/' . $batch->batch_code . '.pdf'),
+            storage_path('app/merged_pdf/' . $batch->file_name),
+            storage_path('app/merged_pdf/' . $batch->file_name . '.pdf'),
+            storage_path('app/merged_pdf/' . $batch->batch_code . '.pdf'),
+            'd:/Test.pdf',
+        ];
+
+        $path = null;
+        foreach ($candidates as $candidate) {
+            if (file_exists($candidate) && is_file($candidate)) {
+                $path = $candidate;
+                break;
             }
+        }
+
+        if (!$path) {
+            abort(404, 'File PDF resi tidak ditemukan di server.');
         }
 
         return response()->file($path, [

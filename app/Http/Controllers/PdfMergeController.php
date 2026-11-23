@@ -128,6 +128,14 @@ class PdfMergeController extends Controller
         if ($request->input('action_type') === 'rekap') {
             try {
                 $batch = $this->parserService->processPdf($outputFullPath, $outputBaseName, 'Semua Toko');
+
+                // Store PDF for page inspection & verification in batches_pdf
+                $destDir = storage_path('app/batches_pdf');
+                if (!is_dir($destDir)) {
+                    @mkdir($destDir, 0755, true);
+                }
+                @copy($outputFullPath, $destDir . '/' . $batch->batch_code . '.pdf');
+
                 $successMsg = "Berhasil menggabungkan {$mergeData['total_files']} file PDF.";
 
                 return redirect()->route('resi.batch', $batch->id)

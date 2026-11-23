@@ -37,11 +37,11 @@ class StoreAndProductSeeder extends Seeder
                 'sender_keywords' => 'moveda, bandana buff',
             ],
             [
-                'name' => 'Bandana Buff Outdoor Indonesia (TikTok)',
+                'name' => 'Moveda Activewear (TikTok Shop/Tokped)',
                 'brand' => 'Moveda',
                 'platform' => 'TikTok Shop',
                 'courier' => 'J&T Express',
-                'sender_keywords' => 'bandana buff, bandana buff outdoor',
+                'sender_keywords' => 'bandana buff, bandana buff outdoor, moveda',
             ],
         ];
 

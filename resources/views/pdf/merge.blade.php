@@ -260,8 +260,7 @@
                 totalBytes += file.size;
 
                 const item = document.createElement('div');
-                item.className = 'flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl transition duration-150 draggable-item cursor-grab active:cursor-grabbing';
-                item.setAttribute('draggable', 'true');
+                item.className = 'flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl transition duration-150 draggable-item';
                 item.setAttribute('data-index', index);
 
                 const isFirst = index === 0;
@@ -269,7 +268,7 @@
 
                 item.innerHTML = `
                     <div class="flex items-center space-x-3 min-w-0 flex-1 mr-3">
-                        <span class="text-slate-400 hover:text-slate-600 cursor-grab text-lg select-none px-1 py-1" title="Geser (drag) untuk ubah posisi urutan">⠿</span>
+                        <span class="drag-handle text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing text-xl select-none px-1.5 py-1 rounded hover:bg-slate-200/60 transition" draggable="true" title="Klik dan geser (drag) untuk ubah posisi urutan">⠿</span>
                         <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-600 text-white font-extrabold text-xs flex items-center justify-center shadow-xs">
                             #${index + 1}
                         </span>
@@ -297,25 +296,26 @@
                                    max="${fileQueue.length}" 
                                    value="${index + 1}" 
                                    data-index="${index}" 
+                                   draggable="false"
                                    class="input-order-num w-12 text-center text-xs font-black text-blue-700 bg-slate-50 focus:bg-white focus:outline-none rounded py-0.5 border border-slate-200">
-                            <button type="button" class="btn-apply-order ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded transition shadow-2xs" title="Terapkan nomor urutan">✓</button>
+                            <button type="button" class="btn-apply-order ml-1.5 px-2 py-0.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded transition shadow-2xs cursor-pointer" title="Terapkan nomor urutan">✓</button>
                         </div>
                         <button type="button" 
-                                class="btn-move-up p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition" 
+                                class="btn-move-up p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer" 
                                 title="Pindahkan ke atas"
                                 ${isFirst ? 'disabled' : ''}
                                 data-index="${index}">
                             ⬆️
                         </button>
                         <button type="button" 
-                                class="btn-move-down p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition" 
+                                class="btn-move-down p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer" 
                                 title="Pindahkan ke bawah"
                                 ${isLast ? 'disabled' : ''}
                                 data-index="${index}">
                             ⬇️
                         </button>
                         <button type="button" 
-                                class="btn-remove p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition" 
+                                class="btn-remove p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition cursor-pointer" 
                                 title="Hapus file ini"
                                 data-index="${index}">
                             ✕
@@ -337,36 +337,34 @@
 
         // Attach listeners for Up, Down, Remove, Drag&Drop, and Direct Number Ordering
         function attachItemEventListeners() {
+            function applyOrderChange(inputEl) {
+                const currentIdx = parseInt(inputEl.getAttribute('data-index'), 10);
+                let targetPos = parseInt(inputEl.value, 10);
+                if (isNaN(targetPos)) {
+                    inputEl.value = currentIdx + 1;
+                    return;
+                }
+                targetPos = Math.max(1, Math.min(fileQueue.length, targetPos));
+                const targetIdx = targetPos - 1;
+                if (targetIdx !== currentIdx) {
+                    const [movedItem] = fileQueue.splice(currentIdx, 1);
+                    fileQueue.splice(targetIdx, 0, movedItem);
+                    renderFileList();
+                } else {
+                    inputEl.value = currentIdx + 1;
+                }
+            }
+
             document.querySelectorAll('.input-order-num').forEach(input => {
                 input.addEventListener('focus', function () {
                     this.select();
                 });
 
-                const handleOrderChange = function () {
-                    const currentIdx = parseInt(this.getAttribute('data-index'), 10);
-                    let targetPos = parseInt(this.value, 10);
-                    if (isNaN(targetPos)) {
-                        this.value = currentIdx + 1;
-                        return;
-                    }
-                    targetPos = Math.max(1, Math.min(fileQueue.length, targetPos));
-                    const targetIdx = targetPos - 1;
-                    if (targetIdx !== currentIdx) {
-                        const [movedItem] = fileQueue.splice(currentIdx, 1);
-                        fileQueue.splice(targetIdx, 0, movedItem);
-                        renderFileList();
-                    } else {
-                        this.value = currentIdx + 1;
-                    }
-                };
-
-                input.addEventListener('change', handleOrderChange);
-                input.addEventListener('blur', handleOrderChange);
                 input.addEventListener('keydown', function (e) {
                     if (e.key === 'Enter' || e.keyCode === 13) {
                         e.preventDefault();
                         e.stopPropagation();
-                        handleOrderChange.call(this);
+                        applyOrderChange(this);
                     }
                 });
 
@@ -375,7 +373,7 @@
                     applyBtn.addEventListener('click', function (e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        handleOrderChange.call(input);
+                        applyOrderChange(input);
                     });
                 }
             });
@@ -415,25 +413,25 @@
                 });
             });
 
-            // HTML5 Drag & Drop reordering between file cards
+            // HTML5 Drag & Drop reordering between file cards using drag-handle
             let draggedIndex = null;
-            document.querySelectorAll('.draggable-item').forEach(item => {
-                item.addEventListener('dragstart', function (e) {
-                    // Do not drag if mouse is interacting with inputs or buttons
-                    if (e.target.closest('input, button')) {
-                        e.preventDefault();
-                        return;
-                    }
-                    draggedIndex = parseInt(this.getAttribute('data-index'), 10);
+
+            document.querySelectorAll('.drag-handle').forEach(handle => {
+                handle.addEventListener('dragstart', function (e) {
+                    const card = this.closest('.draggable-item');
+                    draggedIndex = parseInt(card.getAttribute('data-index'), 10);
                     e.dataTransfer.effectAllowed = 'move';
-                    this.classList.add('opacity-40');
+                    card.classList.add('opacity-40');
                 });
 
-                item.addEventListener('dragend', function () {
-                    this.classList.remove('opacity-40');
+                handle.addEventListener('dragend', function () {
+                    const card = this.closest('.draggable-item');
+                    if (card) card.classList.remove('opacity-40');
                     document.querySelectorAll('.draggable-item').forEach(el => el.classList.remove('border-blue-500', 'bg-blue-50/70'));
                 });
+            });
 
+            document.querySelectorAll('.draggable-item').forEach(item => {
                 item.addEventListener('dragover', function (e) {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
@@ -452,6 +450,7 @@
                     if (draggedIndex !== null && targetIdx !== draggedIndex) {
                         const [movedItem] = fileQueue.splice(draggedIndex, 1);
                         fileQueue.splice(targetIdx, 0, movedItem);
+                        draggedIndex = null;
                         renderFileList();
                     }
                 });
@@ -509,12 +508,19 @@
 
             // Provide visual feedback
             if (actionType === 'download') {
-                btnSubmitDownload.innerHTML = '<span class="animate-spin mr-2">⏳</span> Menggabungkan...';
+                const origDownloadHtml = '<span class="mr-2 text-base">📥</span> Download PDF Gabungan Saja';
+                btnSubmitDownload.innerHTML = '<span class="animate-spin mr-2">⏳</span> Mengunduh PDF...';
+                btnSubmitDownload.disabled = true;
+                // Since download response does not unload the browser page, restore button after 3.5s
+                setTimeout(() => {
+                    btnSubmitDownload.innerHTML = origDownloadHtml;
+                    btnSubmitDownload.disabled = false;
+                }, 3500);
             } else {
                 btnSubmitRekap.innerHTML = '<span class="animate-spin mr-2">⏳</span> Menggabung & Merekap...';
+                btnSubmitDownload.disabled = true;
+                btnSubmitRekap.disabled = true;
             }
-            btnSubmitDownload.disabled = true;
-            btnSubmitRekap.disabled = true;
 
             HTMLFormElement.prototype.submit.call(mergeForm);
         }

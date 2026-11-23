@@ -165,14 +165,10 @@ class ResiParserService
 
         // TikTok Shop / J&T Express
         if (str_contains($platformLower, 'tiktok') || str_contains($platformLower, 'tokopedia') || str_contains($courierLower, 'j&t')) {
-            if (str_contains($senderLower, 'bandana buff')) {
-                return Store::where('name', 'like', '%Bandana Buff%')->first()
-                    ?? Store::where('platform', 'like', '%TikTok%')->where('brand', 'Moveda')->first()
+            if (str_contains($senderLower, 'bandana buff') || str_contains($senderLower, 'moveda')) {
+                return Store::where('name', 'like', '%Moveda%')->where('platform', 'like', '%TikTok%')->first()
+                    ?? Store::where('brand', 'Moveda')->where('platform', 'like', '%TikTok%')->first()
                     ?? Store::where('id', 4)->first();
-            }
-            if (str_contains($senderLower, 'moveda')) {
-                return Store::where('platform', 'like', '%TikTok%')->where('brand', 'Moveda')->first()
-                    ?? Store::where('name', 'like', '%Bandana Buff%')->first();
             }
             return Store::where('brand', 'Aruna')->where('platform', 'like', '%TikTok%')->first()
                 ?? Store::where('id', 2)->first()
