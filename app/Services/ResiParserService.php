@@ -28,8 +28,19 @@ class ResiParserService
             $python = $knownPython;
         }
 
+        // Environment variables untuk mencegah error '_Py_HashRandomization_Init' di Windows/Apache
+        $processEnv = array_filter([
+            'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows',
+            'WINDIR' => getenv('WINDIR') ?: 'C:\\Windows',
+            'PATH' => getenv('PATH') ?: (isset($_SERVER['PATH']) ? $_SERVER['PATH'] : null),
+            'TEMP' => getenv('TEMP') ?: sys_get_temp_dir(),
+            'TMP' => getenv('TMP') ?: sys_get_temp_dir(),
+            'PYTHONHASHSEED' => '0',
+            'PYTHONIOENCODING' => 'utf-8',
+        ]);
+
         // Run Python Parser script
-        $result = Process::run([$python, $pythonScript, $pdfPath]);
+        $result = Process::env($processEnv)->run([$python, $pythonScript, $pdfPath]);
 
         if (!$result->successful()) {
             $err = $result->errorOutput() ?: $result->output();

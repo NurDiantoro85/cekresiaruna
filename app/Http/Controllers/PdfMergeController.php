@@ -92,6 +92,16 @@ class PdfMergeController extends Controller
         $standardizeMode = 'standard_a6';
         $autoRotate = '1';
 
+        $processEnv = array_filter([
+            'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows',
+            'WINDIR' => getenv('WINDIR') ?: 'C:\\Windows',
+            'PATH' => getenv('PATH') ?: (isset($_SERVER['PATH']) ? $_SERVER['PATH'] : null),
+            'TEMP' => getenv('TEMP') ?: sys_get_temp_dir(),
+            'TMP' => getenv('TMP') ?: sys_get_temp_dir(),
+            'PYTHONHASHSEED' => '0',
+            'PYTHONIOENCODING' => 'utf-8',
+        ]);
+
         $cmd = array_merge([
             $python,
             $pythonScript,
@@ -102,7 +112,7 @@ class PdfMergeController extends Controller
             '--auto-rotate',
             $autoRotate,
         ], $savedFilePaths);
-        $result = Process::run($cmd);
+        $result = Process::env($processEnv)->run($cmd);
 
         // Cleanup temporary input files
         Storage::deleteDirectory($tempDir);
