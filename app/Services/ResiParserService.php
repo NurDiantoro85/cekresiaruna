@@ -219,8 +219,8 @@ class ResiParserService
                 }
             }
 
-            // Check exact variant for this platform or universal (when rawVarTrim is not empty)
-            if (!$mapping && $rawVarTrim !== '') {
+            // Check exact variant ONLY when rawSku is empty in resi (no SKU code specified)
+            if (!$mapping && $rawVarTrim !== '' && $rawSkuTrim === '') {
                 $mapping = ProductMapping::where('platform', $platform)
                     ->where('raw_variant', $rawVarTrim)
                     ->first();
@@ -253,17 +253,29 @@ class ResiParserService
                 $rawSkuLower = strtolower($rawSkuTrim);
                 $rawAll = strtolower($rawName . ' ' . $rawSkuLower . ' ' . $rawVarLower);
 
-                $contextHasHdbn = str_contains($rawAll, 'hdbn') || str_contains($rawAll, 'headband');
+                $contextHasHdbn = str_contains($rawAll, 'hdbn') || str_contains($rawAll, 'headband') || str_contains($rawAll, 'bando');
                 $mpHasHdbn = str_starts_with($mpVar, 'hdbn');
 
                 $contextHasArm = str_contains($rawAll, 'armsleeve') || str_contains($rawAll, 'arm') || str_contains($rawAll, 'manset');
                 $mpHasArm = str_starts_with($mpVar, 'arm');
 
-                // If input clearly specifies Headband but mapped MP is non-Headband (or vice versa), reject bad mapping
+                $contextHasJersey = str_contains($rawAll, 'jersey');
+                $mpHasJersey = str_starts_with($mpVar, 'jersey');
+
+                $contextHasSet = preg_match('/\bset\b/i', $rawAll) || str_contains($rawAll, 'paket set');
+                $mpHasSet = str_starts_with($mpVar, 'set');
+
+                $contextHasSlayer = str_contains($rawAll, 'slayer');
+                $mpHasSlayer = str_starts_with($mpVar, 'slayer');
+
+                // Reject cross-category mismatches when variant is specified
                 $mismatchHdbn = ($contextHasHdbn && !$mpHasHdbn && !empty($rawVarTrim));
                 $mismatchArm = ($contextHasArm && !$mpHasArm && !empty($rawVarTrim) && !str_contains($rawAll, 'alarm'));
+                $mismatchJersey = ($contextHasJersey && !$mpHasJersey && !empty($rawVarTrim));
+                $mismatchSet = ($contextHasSet && !$mpHasSet && !empty($rawVarTrim));
+                $mismatchSlayer = ($contextHasSlayer && !$mpHasSlayer && !empty($rawVarTrim));
 
-                if (!$mismatchHdbn && !$mismatchArm) {
+                if (!$mismatchHdbn && !$mismatchArm && !$mismatchJersey && !$mismatchSet && !$mismatchSlayer) {
                     return $mapping->masterProduct;
                 }
             }
