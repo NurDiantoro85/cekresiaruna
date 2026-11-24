@@ -201,40 +201,69 @@ class ResiParserService
 
         // 1. Check ProductMapping table (Kamus Penerjemah / Alias)
         if ($rawSkuTrim !== '' || $rawVarTrim !== '') {
-            // Check specific platform mapping
-            $mapping = ProductMapping::where('platform', $platform)
-                ->where('raw_sku', $rawSkuTrim)
-                ->where(function ($q) use ($rawVarTrim) {
-                    $q->where('raw_variant', $rawVarTrim)
-                      ->orWhere('raw_variant', '')
-                      ->orWhereNull('raw_variant');
-                })
-                ->first();
+            $mapping = null;
 
-            if ($mapping && $mapping->masterProduct) {
-                return $mapping->masterProduct;
+            // Check exact SKU + Variant for this platform
+            if ($rawSkuTrim !== '' && $rawVarTrim !== '') {
+                $mapping = ProductMapping::where('platform', $platform)
+                    ->where('raw_sku', $rawSkuTrim)
+                    ->where('raw_variant', $rawVarTrim)
+                    ->first();
+                if (!$mapping) {
+                    $mapping = ProductMapping::where(function ($q) use ($platform) {
+                            $q->whereNull('platform')->orWhere('platform', '')->orWhere('platform', $platform);
+                        })
+                        ->where('raw_sku', $rawSkuTrim)
+                        ->where('raw_variant', $rawVarTrim)
+                        ->first();
+                }
             }
 
-            // Check universal platform mapping
-            $mapping = ProductMapping::where(function ($q) use ($platform) {
-                    $q->whereNull('platform')->orWhere('platform', '')->orWhere('platform', $platform);
-                })
-                ->where('raw_sku', $rawSkuTrim)
-                ->where(function ($q) use ($rawVarTrim) {
-                    $q->where('raw_variant', $rawVarTrim)
-                      ->orWhere('raw_variant', '')
-                      ->orWhereNull('raw_variant');
-                })
-                ->first();
-
-            if ($mapping && $mapping->masterProduct) {
-                return $mapping->masterProduct;
+            // Check exact variant for this platform or universal (when rawVarTrim is not empty)
+            if (!$mapping && $rawVarTrim !== '') {
+                $mapping = ProductMapping::where('platform', $platform)
+                    ->where('raw_variant', $rawVarTrim)
+                    ->first();
+                if (!$mapping) {
+                    $mapping = ProductMapping::where('raw_variant', $rawVarTrim)->first();
+                }
             }
 
-            // Also check mapping where raw_variant is matched against rawVarTrim
-            if ($rawVarTrim !== '') {
-                $mapping = ProductMapping::where('raw_variant', $rawVarTrim)->first();
-                if ($mapping && $mapping->masterProduct) {
+            // Check single-variant mapping (raw_variant is empty in resi)
+            if (!$mapping && $rawVarTrim === '' && $rawSkuTrim !== '') {
+                $mapping = ProductMapping::where('platform', $platform)
+                    ->where('raw_sku', $rawSkuTrim)
+                    ->where(function ($q) {
+                        $q->where('raw_variant', '')->orWhereNull('raw_variant');
+                    })
+                    ->first();
+                if (!$mapping) {
+                    $mapping = ProductMapping::where('raw_sku', $rawSkuTrim)
+                        ->where(function ($q) {
+                            $q->where('raw_variant', '')->orWhereNull('raw_variant');
+                        })
+                        ->first();
+                }
+            }
+
+            // Safety validation for mapping: Ensure category alignment
+            if ($mapping && $mapping->masterProduct) {
+                $mpVar = strtolower($mapping->masterProduct->variant ?? '');
+                $rawVarLower = strtolower($rawVarTrim);
+                $rawSkuLower = strtolower($rawSkuTrim);
+                $rawAll = strtolower($rawName . ' ' . $rawSkuLower . ' ' . $rawVarLower);
+
+                $contextHasHdbn = str_contains($rawAll, 'hdbn') || str_contains($rawAll, 'headband');
+                $mpHasHdbn = str_starts_with($mpVar, 'hdbn');
+
+                $contextHasArm = str_contains($rawAll, 'armsleeve') || str_contains($rawAll, 'arm') || str_contains($rawAll, 'manset');
+                $mpHasArm = str_starts_with($mpVar, 'arm');
+
+                // If input clearly specifies Headband but mapped MP is non-Headband (or vice versa), reject bad mapping
+                $mismatchHdbn = ($contextHasHdbn && !$mpHasHdbn && !empty($rawVarTrim));
+                $mismatchArm = ($contextHasArm && !$mpHasArm && !empty($rawVarTrim) && !str_contains($rawAll, 'alarm'));
+
+                if (!$mismatchHdbn && !$mismatchArm) {
                     return $mapping->masterProduct;
                 }
             }
@@ -251,7 +280,7 @@ class ResiParserService
 
         // 3. Match against MasterVariant Dictionary
         $primaryAcuan = ($platform === 'Shopee') ? ($rawVarTrim ?: $rawSkuTrim) : ($rawSkuTrim ?: $rawVarTrim);
-        $matchedVariantName = $this->matchAgainstVariantDictionary($primaryAcuan, $rawSkuTrim, $rawVarTrim);
+        $matchedVariantName = $this->matchAgainstVariantDictionary($primaryAcuan, $rawSkuTrim, $rawVarTrim, $rawName);
 
         if ($matchedVariantName) {
             $mp = MasterProduct::where('variant', $matchedVariantName)->first();
@@ -363,9 +392,9 @@ class ResiParserService
     }
 
     /**
-     * Match against MasterVariant dictionary using exact, normalized, and substring matching.
+     * Match against MasterVariant dictionary using exact, normalized, category-aware, and substring matching.
      */
-    protected function matchAgainstVariantDictionary(string $acuan, string $rawSku, string $rawVariant): ?string
+    protected function matchAgainstVariantDictionary(string $acuan, string $rawSku, string $rawVariant, ?string $rawName = null): ?string
     {
         static $variantsCache = null;
         if ($variantsCache === null) {
@@ -383,20 +412,96 @@ class ResiParserService
             });
         }
 
-        $candAcuan = preg_replace('/[^a-z0-9]/', '', strtolower($acuan));
+        $allContext = strtolower(implode(' ', array_filter([$rawName, $rawSku, $rawVariant, $acuan])));
+
+        $isHeadband = str_contains($allContext, 'headband') 
+            || str_contains($allContext, 'hdbn') 
+            || str_contains($allContext, 'ikat kepala') 
+            || str_contains($allContext, 'bando');
+
+        $isArm = str_contains($allContext, 'armsleeve') 
+            || str_contains($allContext, 'arm sleeve') 
+            || str_contains($allContext, 'manset') 
+            || preg_match('/\barm\b/i', $allContext) 
+            || str_starts_with(strtolower(trim($rawSku)), 'arm');
+
+        $isJersey = str_contains($allContext, 'jersey');
+        $isSlayer = str_contains($allContext, 'slayer');
+        $isSet = preg_match('/\bset\b/i', $allContext) || str_contains($allContext, 'paket set');
+        $isBelt = str_contains($allContext, 'running belt') || str_contains($allContext, 'belt');
+
         $candVar = preg_replace('/[^a-z0-9]/', '', strtolower($rawVariant));
+        $candAcuan = preg_replace('/[^a-z0-9]/', '', strtolower($acuan));
         $candSku = preg_replace('/[^a-z0-9]/', '', strtolower($rawSku));
 
-        // 1. Exact normalized match on variant or acuan
+        // 1. Exact normalized match with category context checks
         foreach ([$candVar, $candAcuan, $candSku] as $cand) {
-            if ($cand !== '' && isset($variantsCache[$cand])) {
+            if ($cand === '') continue;
+
+            if (isset($variantsCache[$cand])) {
+                $normMatched = $cand;
+
+                if ($isHeadband && !str_starts_with($normMatched, 'hdbn') && isset($variantsCache['hdbn' . $normMatched])) {
+                    return $variantsCache['hdbn' . $normMatched];
+                }
+                if ($isArm && !str_starts_with($normMatched, 'arm') && isset($variantsCache['arm' . $normMatched])) {
+                    return $variantsCache['arm' . $normMatched];
+                }
+                if ($isSet && !str_starts_with($normMatched, 'set') && isset($variantsCache['set' . $normMatched])) {
+                    return $variantsCache['set' . $normMatched];
+                }
+                if ($isJersey && !str_starts_with($normMatched, 'jersey') && isset($variantsCache['jersey' . $normMatched])) {
+                    return $variantsCache['jersey' . $normMatched];
+                }
+                if ($isSlayer && !str_starts_with($normMatched, 'slayer') && isset($variantsCache['slayer' . $normMatched])) {
+                    return $variantsCache['slayer' . $normMatched];
+                }
+
                 return $variantsCache[$cand];
+            }
+
+            if ($isHeadband && isset($variantsCache['hdbn' . $cand])) {
+                return $variantsCache['hdbn' . $cand];
+            }
+            if ($isArm && isset($variantsCache['arm' . $cand])) {
+                return $variantsCache['arm' . $cand];
+            }
+            if ($isSet && isset($variantsCache['set' . $cand])) {
+                return $variantsCache['set' . $cand];
+            }
+            if ($isJersey && isset($variantsCache['jersey' . $cand])) {
+                return $variantsCache['jersey' . $cand];
+            }
+            if ($isSlayer && isset($variantsCache['slayer' . $cand])) {
+                return $variantsCache['slayer' . $cand];
             }
         }
 
-        // 2. Suffix / Substring match on variant, acuan, or sku
+        // 2. Suffix / Substring match on variant, acuan, or sku with strict category isolation
         foreach ($variantsCache as $norm => $origName) {
             if (strlen($norm) < 3) continue;
+
+            $normIsHdbn = str_starts_with($norm, 'hdbn');
+            $normIsArm = str_starts_with($norm, 'arm');
+            $normIsSet = str_starts_with($norm, 'set');
+            $normIsJersey = str_starts_with($norm, 'jersey');
+            $normIsSlayer = str_starts_with($norm, 'slayer');
+
+            // Category boundary protection:
+            if (!$isHeadband && $normIsHdbn) continue;
+            if ($isHeadband && !$normIsHdbn && isset($variantsCache['hdbn' . $norm])) continue;
+
+            if (!$isArm && $normIsArm) continue;
+            if ($isArm && !$normIsArm && isset($variantsCache['arm' . $norm])) continue;
+
+            if (!$isSet && $normIsSet) continue;
+            if ($isSet && !$normIsSet && isset($variantsCache['set' . $norm])) continue;
+
+            if (!$isJersey && $normIsJersey) continue;
+            if ($isJersey && !$normIsJersey && isset($variantsCache['jersey' . $norm])) continue;
+
+            if (!$isSlayer && $normIsSlayer) continue;
+
             if ($candVar !== '' && (str_ends_with($candVar, $norm) || str_contains($candVar, $norm))) {
                 return $origName;
             }
@@ -409,17 +514,54 @@ class ResiParserService
         }
 
         // 3. Try stripping known category prefixes (e.g. Bandana, Headband, ArmSleeve, Slayer, etc.)
-        $prefixes = ['bandana', 'headband', 'armsleeve', 'arm', 'slayer', 'headwear', 'reflektive', 'baff', 'buff', 'outer', 'jersey'];
+        $prefixes = [
+            'headband' => 'hdbn',
+            'hdbn' => 'hdbn',
+            'armsleeve' => 'arm',
+            'arm' => 'arm',
+            'manset' => 'arm',
+            'jersey' => 'jersey',
+            'slayer' => 'slayer',
+            'set' => 'set',
+            'bandana' => '',
+            'headwear' => '',
+            'reflektive' => 'arm',
+            'baff' => '',
+            'buff' => '',
+            'outer' => 'outer',
+        ];
+
         foreach ([$candVar, $candAcuan, $candSku] as $cand) {
             if ($cand === '') continue;
-            foreach ($prefixes as $pfx) {
+            foreach ($prefixes as $pfx => $targetPfx) {
                 if (str_starts_with($cand, $pfx)) {
                     $stripped = substr($cand, strlen($pfx));
+                    if (strlen($stripped) < 3) continue;
+
+                    // If target prefix exists (e.g. hdbn, arm, set), check if prefixed variant exists
+                    if ($targetPfx !== '') {
+                        $prefixedNorm = $targetPfx . $stripped;
+                        if (isset($variantsCache[$prefixedNorm])) {
+                            return $variantsCache[$prefixedNorm];
+                        }
+                    }
+
+                    // Check exact stripped in cache
                     if (isset($variantsCache[$stripped])) {
+                        if ($targetPfx !== '' && isset($variantsCache[$targetPfx . $stripped])) {
+                            return $variantsCache[$targetPfx . $stripped];
+                        }
                         return $variantsCache[$stripped];
                     }
+
+                    // Check substring on stripped
                     foreach ($variantsCache as $norm => $origName) {
                         if (strlen($norm) < 3) continue;
+                        if ($targetPfx !== '' && !str_starts_with($norm, $targetPfx)) {
+                            if (isset($variantsCache[$targetPfx . $norm])) {
+                                continue;
+                            }
+                        }
                         if (str_ends_with($stripped, $norm) || str_contains($stripped, $norm)) {
                             return $origName;
                         }

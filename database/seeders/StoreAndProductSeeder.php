@@ -236,18 +236,19 @@ class StoreAndProductSeeder extends Seeder
             ],
             [
                 'sku' => 'Headband',
-                'variant' => 'Seaweed',
+                'variant' => 'Hdbn Seaweed',
                 'stodo_code' => 'ARN-HDB-SEA',
                 'name' => 'Aruna Headband Olahraga Quick Dry',
                 'brand' => 'Aruna',
                 'mappings' => [
                     ['platform' => 'Shopee', 'raw_sku' => 'HeadbandSe aweed', 'raw_variant' => ''],
                     ['platform' => 'Shopee', 'raw_sku' => 'Headband', 'raw_variant' => 'Seaweed'],
+                    ['platform' => 'Shopee', 'raw_sku' => 'Headband', 'raw_variant' => 'Hdbn Seaweed'],
                 ]
             ],
             [
                 'sku' => 'Headband',
-                'variant' => 'Gray Rain',
+                'variant' => 'Hdbn Gray Rain',
                 'stodo_code' => 'ARN-HDB-GRAY',
                 'name' => 'Aruna Headband Olahraga Quick Dry',
                 'brand' => 'Aruna',
@@ -267,7 +268,7 @@ class StoreAndProductSeeder extends Seeder
             ],
             [
                 'sku' => 'ArmSleeve',
-                'variant' => 'ArmSoilBlack',
+                'variant' => 'Arm Soil Black',
                 'stodo_code' => 'ARN-ARM-SOIL',
                 'name' => 'Aruna Manset Tangan Arm Sleeve',
                 'brand' => 'Aruna',
@@ -277,7 +278,7 @@ class StoreAndProductSeeder extends Seeder
             ],
             [
                 'sku' => 'ArmSleeve',
-                'variant' => 'ArmGrayRain',
+                'variant' => 'Arm Gray Rain',
                 'stodo_code' => 'ARN-ARM-GRAY',
                 'name' => 'Aruna Manset Tangan Arm Sleeve',
                 'brand' => 'Aruna',
@@ -287,7 +288,7 @@ class StoreAndProductSeeder extends Seeder
             ],
             [
                 'sku' => 'Slayer',
-                'variant' => 'SlayerBlueBrown',
+                'variant' => 'Slayer Blue Brown',
                 'stodo_code' => 'ARN-SLY-BLUBRN',
                 'name' => 'Aruna Slayer Bandana Paisley',
                 'brand' => 'Aruna',
